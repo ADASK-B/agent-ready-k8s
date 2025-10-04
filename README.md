@@ -900,12 +900,13 @@ agent-ready-k8s-stack/
 │       ├── disallow-latest-tag.yaml
 │       └── require-resource-limits.yaml
 │
-├── scripts/
+├── setup-template/                       # Template-Setup-Scripts
+│   ├── README.md                         # Script-Dokumentation
+│   ├── setup-complete-template.sh        # Master-Script (Block 3-8)
 │   ├── 01-install-tools.sh               # Installiert alle Tools
-│   ├── 02-setup-cluster.sh               # Kind + Flux Bootstrap
-│   ├── 03-run-checks.sh                  # Security-Scans
-│   ├── 04-cleanup.sh                     # Cluster-Teardown
-│   ├── tenant-create.sh                  # Neuen Tenant anlegen
+│   ├── 02-setup-template-structure.sh    # Clont Flux Example, erstellt Struktur
+│   ├── 03-create-kind-cluster.sh         # Kind-Cluster erstellen
+│   ├── 04-deploy-infrastructure.sh       # Ingress-Nginx deployen
 │   └── utils/
 │       ├── wait-for-ready.sh
 │       └── get-logs.sh
@@ -929,16 +930,43 @@ agent-ready-k8s-stack/
 
 ## ⚡ Quick Start
 
+### **🚀 Schnellstart: Komplette Automation**
+
+```bash
+# Repository klonen
+git clone https://github.com/ADASK-B/agent-ready-k8s.git
+cd agent-ready-k8s
+
+# ROADMAP.md lesen (Phasen-Plan)
+cat ROADMAP.md
+
+# Tools installieren (Block 1-2)
+# Siehe ROADMAP.md für manuelle Installation
+
+# Komplette Template-Erstellung (Block 3-8)
+chmod +x setup-template/setup-complete-template.sh
+./setup-template/setup-complete-template.sh
+
+# Ergebnis: http://demo.localhost läuft! 🎉
+```
+
+**⏱️ Runtime:** ~20-30 Minuten (einmalig)  
+**Ergebnis:** Laufende podinfo-Demo unter http://demo.localhost  
+**Nächster Schritt:** Siehe [ROADMAP.md](ROADMAP.md) Phase 1, Block 9
+
+---
+
+### **📋 Oder: Manuelles Setup (Schritt für Schritt)**
+
 ### **1. Tools installieren (einmalig)**
 
 ```bash
 # Repository klonen
-git clone https://github.com/ADASK-B/agent-ready-k8s-stack.git
-cd agent-ready-k8s-stack
+git clone https://github.com/ADASK-B/agent-ready-k8s.git
+cd agent-ready-k8s
 
 # Alle Tools installieren (Docker, kind, kubectl, Flux, etc.)
-chmod +x scripts/01-install-tools.sh
-./scripts/01-install-tools.sh
+# Siehe ROADMAP.md Block 1-2 für detaillierte Befehle
 
 # Reboot (für Docker-Gruppe)
 sudo reboot
@@ -1444,6 +1472,26 @@ task db:backup SCHEDULE="0 2 * * *"  # Täglich 2 Uhr
 ## 📝 Lizenz
 
 MIT License - siehe [LICENSE](LICENSE)
+
+---
+
+## 🙏 Credits & Attributions
+
+This template is built upon best practices from leading open-source projects:
+
+- **[FluxCD flux2-kustomize-helm-example](https://github.com/fluxcd/flux2-kustomize-helm-example)** (Apache-2.0)  
+  → GitOps patterns, Kustomize layouts, repository structure
+  
+- **[podinfo](https://github.com/stefanprodan/podinfo)** by Stefan Prodan (Apache-2.0)  
+  → Demo application for testing Kubernetes deployments
+  
+- **[AKS Baseline Automation](https://github.com/Azure/aks-baseline-automation)** by Microsoft (MIT)  
+  → Azure Kubernetes Service best practices (Phase 2 only)
+
+- **[helm/kind-action](https://github.com/helm/kind-action)** by The Helm Authors (Apache-2.0)  
+  → CI/CD testing with ephemeral kind clusters (Phase 2 only)
+
+See [LICENSE-3RD-PARTY.md](LICENSE-3RD-PARTY.md) for full attribution and license details.
 
 ---
 
