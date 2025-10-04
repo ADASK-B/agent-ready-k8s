@@ -89,16 +89,24 @@ else
   log_fail "Not all nodes are Ready ($ready_nodes/$total_nodes)"
 fi
 
-# Test system pods
+# Test system pods (with retry for newly created clusters)
 log_test "System Pods"
-pending_pods=$(kubectl get pods -n kube-system --no-headers 2>/dev/null | grep -v "Running\|Completed" | wc -l)
-
-if [ "$pending_pods" -eq 0 ]; then
-  running_pods=$(kubectl get pods -n kube-system --no-headers 2>/dev/null | grep "Running" | wc -l)
-  log_pass "All system pods running ($running_pods pods)"
-else
-  log_fail "$pending_pods system pod(s) not running"
-fi
+max_retries=3
+retry=0
+while [ $retry -lt $max_retries ]; do
+  pending_pods=$(kubectl get pods -n kube-system --no-headers 2>/dev/null | grep -v "Running\|Completed" | wc -l)
+  
+  if [ "$pending_pods" -eq 0 ]; then
+    running_pods=$(kubectl get pods -n kube-system --no-headers 2>/dev/null | grep "Running" | wc -l)
+    log_pass "All system pods running ($running_pods pods)"
+    break
+  elif [ $retry -lt $((max_retries - 1)) ]; then
+    sleep 2
+    ((retry++))
+  else
+    log_fail "$pending_pods system pod(s) not running"
+  fi
+done
 
 # Test Kubernetes version
 log_test "Kubernetes Version"
