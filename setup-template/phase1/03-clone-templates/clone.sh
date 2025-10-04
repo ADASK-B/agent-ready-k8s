@@ -87,7 +87,38 @@ if [ -d "$TEMP_DIR/apps/staging/podinfo" ]; then
   cp -r "$TEMP_DIR/apps/staging/podinfo/"* "apps/podinfo/tenants/demo/"
   log_success "Copied tenant manifests to apps/podinfo/tenants/demo/"
 else
-  log_warning "No staging manifests found in clone (path changed?)"
+  log_warning "No staging manifests found in clone (creating minimal tenant overlay)"
+  
+  # Create minimal tenant kustomization
+  cat > apps/podinfo/tenants/demo/kustomization.yaml << 'TENANT_EOF'
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: tenant-demo
+resources:
+  - ../../base
+patchesStrategicMerge:
+  - patch.yaml
+TENANT_EOF
+
+  # Create tenant patch
+  cat > apps/podinfo/tenants/demo/patch.yaml << 'PATCH_EOF'
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: podinfo
+  namespace: tenant-demo
+spec:
+  values:
+    replicaCount: 2
+    resources:
+      limits:
+        memory: 256Mi
+      requests:
+        cpu: 100m
+        memory: 64Mi
+PATCH_EOF
+
+  log_success "Created tenant manifests in apps/podinfo/tenants/demo/"
 fi
 
 # Cleanup
