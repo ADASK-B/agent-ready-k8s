@@ -150,23 +150,31 @@ else
   log_fail "Ingress 'podinfo' not found"
 fi
 
-# Test HTTP endpoint
+# Test HTTP endpoint (with retry for ingress propagation)
 log_test "HTTP Endpoint (http://demo.localhost)"
 if command -v curl >/dev/null 2>&1; then
-  http_response=$(curl -s -o /dev/null -w "%{http_code}" http://demo.localhost --max-time 5 || echo "000")
-  if [ "$http_response" = "200" ]; then
-    log_pass "http://demo.localhost returns HTTP 200"
-    
-    # Test JSON response
-    json_response=$(curl -s http://demo.localhost --max-time 5)
-    if echo "$json_response" | grep -q "podinfo"; then
-      log_pass "Response contains 'podinfo' (valid JSON)"
+  max_retries=5
+  retry=0
+  while [ $retry -lt $max_retries ]; do
+    http_response=$(curl -s -o /dev/null -w "%{http_code}" http://demo.localhost --max-time 5 || echo "000")
+    if [ "$http_response" = "200" ]; then
+      log_pass "http://demo.localhost returns HTTP 200"
+      
+      # Test JSON response
+      json_response=$(curl -s http://demo.localhost --max-time 5)
+      if echo "$json_response" | grep -q "podinfo"; then
+        log_pass "Response contains 'podinfo' (valid JSON)"
+      else
+        log_fail "Response does not contain 'podinfo'"
+      fi
+      break
+    elif [ $retry -lt $((max_retries - 1)) ]; then
+      sleep 3
+      ((retry++))
     else
-      log_fail "Response does not contain 'podinfo'"
+      log_fail "http://demo.localhost returns HTTP $http_response (expected: 200)"
     fi
-  else
-    log_fail "http://demo.localhost returns HTTP $http_response (expected: 200)"
-  fi
+  done
 else
   log_fail "curl not installed (cannot test HTTP endpoint)"
 fi
