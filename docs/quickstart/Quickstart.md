@@ -1,60 +1,60 @@
 # 🚀 Quick Start - agent-ready-k8s
 
-> **Szenario:** Frische Ubuntu-Maschine + VSCode + Git Clone → Running Demo  
-> **Ziel:** http://demo.localhost zeigt podinfo v6.9.2 in ~2 Minuten  
-> **Status:** Phase 1 (Lokal mit kind)
+> **Scenario:** Fresh Ubuntu machine + VSCode + Git Clone → Running Demo  
+> **Goal:** http://demo.localhost shows podinfo v6.9.2 in ~2 minutes  
+> **Status:** Phase 1 (Local with kind)
 
 ---
 
-## ⚡ Fast Track - Vollautomatisch (1 Command)
+## ⚡ Fast Track - Fully Automated (1 Command)
 
-**Wenn du bereits alle Tools installiert hast:**
+**If you already have all tools installed:**
 
 ```bash
 cd ~/agent-ready-k8s
 ./setup-template/setup-phase1.sh
 ```
 
-**Runtime:** ~1 Minute 10 Sekunden
+**Runtime:** ~1 minute 10 seconds
 
-**Was das Script macht:**
-1. ✅ Prüft Tools (Docker, kind, kubectl, helm, flux)
-2. ✅ Erstellt Ordnerstruktur (falls nicht vorhanden)
-3. ⚠️  Clont FluxCD-Templates (**überschreibt apps/podinfo/**)
-4. ✅ Erstellt kind-Cluster (agent-k8s-local)
-5. ✅ Deployed ingress-nginx
-6. ✅ Deployed podinfo
-7. ✅ Führt 46 Tests aus
+**What the script does:**
+1. ✅ Checks tools (Docker, kind, kubectl, helm, flux)
+2. ✅ Creates folder structure (if not exists)
+3. ⚠️  Clones FluxCD templates (**overwrites apps/podinfo/**)
+4. ✅ Creates kind cluster (agent-k8s-local)
+5. ✅ Deploys ingress-nginx
+6. ✅ Deploys podinfo
+7. ✅ Runs 46 tests
 
-**⚠️ ACHTUNG:** Block 3 überschreibt `apps/podinfo/` mit FluxCD-Templates!  
-→ Nur nutzen wenn du Manifeste zurücksetzen willst.
+**⚠️ WARNING:** Block 3 overwrites `apps/podinfo/` with FluxCD templates!  
+→ Only use if you want to reset manifests.
 
-**Besser für Production:**  
-→ Folge der manuellen Anleitung unten (überspringt Block 2+3, nutzt Git-Manifeste)
+**Better for production:**  
+→ Follow the manual guide below (skips Block 2+3, uses Git manifests)
 
 ---
 
-## � Nach Reboot - Cluster neu starten
+## 🔄 After Reboot - Restart Cluster
 
-**Situation:** Du hast deinen Rechner neugestartet, Cluster ist weg.
+**Situation:** You restarted your machine, cluster is gone.
 
-### **Was ist noch da?**
-- ✅ Docker (läuft automatisch)
+### **What's still there?**
+- ✅ Docker (starts automatically)
 - ✅ Tools (kind, kubectl, helm, flux)
-- ✅ Git-Repo (apps/, manifeste)
-- ✅ Docker Images (gecached!)
+- ✅ Git repo (apps/, manifests)
+- ✅ Docker images (cached!)
 
-### **Was fehlt?**
-- ❌ kind-Cluster (Container gestoppt)
-- ❌ Alle Pods (weg mit Cluster)
+### **What's missing?**
+- ❌ kind cluster (container stopped)
+- ❌ All pods (gone with cluster)
 
 ### **Quick Commands (Copy-Paste):**
 
-#### **Option 1: Nur Cluster (Manifeste unverändert) - ~1 Min**
+#### **Option 1: Cluster only (Manifests unchanged) - ~1 min**
 ```bash
 cd ~/agent-ready-k8s
 
-# Cluster + Ingress + podinfo (nutzt Git-Manifeste)
+# Cluster + Ingress + podinfo (uses Git manifests)
 ./setup-template/phase1/04-create-cluster/create.sh  # ~17s
 ./setup-template/phase1/05-deploy-ingress/deploy.sh  # ~45s
 ./setup-template/phase1/06-deploy-podinfo/deploy.sh  # ~12s
@@ -63,45 +63,45 @@ cd ~/agent-ready-k8s
 curl http://demo.localhost
 ```
 
-**Runtime:** ~1-2 Minuten (Images gecached!)  
-**Nutzt:** Manifeste aus Git (NICHT überschrieben)
+**Runtime:** ~1-2 minutes (images cached!)  
+**Uses:** Manifests from Git (NOT overwritten)
 
 ---
 
-#### **Option 2: Vollautomatisch - ~1 Min 10s**
+#### **Option 2: Fully automated - ~1 min 10s**
 ```bash
 cd ~/agent-ready-k8s
 ./setup-template/setup-phase1.sh
 ```
 
-**⚠️ ACHTUNG:** Überschreibt `apps/podinfo/` mit FluxCD-Templates!  
-**Nur nutzen wenn:** Du Manifeste zurücksetzen willst
+**⚠️ WARNING:** Overwrites `apps/podinfo/` with FluxCD templates!  
+**Only use if:** You want to reset manifests
 
 ---
 
-### **Warum so schnell nach Reboot?**
-Docker hat Images gecached:
+### **Why so fast after reboot?**
+Docker has cached images:
 ```bash
 docker images
-# kindest/node:v1.27.3       (500MB) ✅ gecached
-# ingress-nginx/controller   (200MB) ✅ gecached
-# podinfo:6.9.2              (20MB)  ✅ gecached
+# kindest/node:v1.27.3       (500MB) ✅ cached
+# ingress-nginx/controller   (200MB) ✅ cached
+# podinfo:6.9.2              (20MB)  ✅ cached
 ```
 
-**Kein Re-Download nötig!** 🚀
+**No re-download needed!** 🚀
 
 ---
 
-### **Troubleshooting nach Reboot:**
+### **Troubleshooting after reboot:**
 
-#### **Docker läuft nicht?**
+#### **Docker not running?**
 ```bash
 sudo systemctl status docker
-# Falls inactive:
+# If inactive:
 sudo systemctl start docker
 ```
 
-#### **Tools nicht gefunden?**
+#### **Tools not found?**
 ```bash
 kind version || echo "PATH Problem!"
 # Fix:
@@ -109,43 +109,41 @@ echo 'export PATH=$PATH:/usr/local/bin' >> ~/.bashrc
 source ~/.bashrc
 ```
 
-#### **Port 80/443 belegt?**
+#### **Port 80/443 occupied?**
 ```bash
 sudo lsof -i :80
 sudo lsof -i :443
-# Apache stoppen:
+# Stop Apache:
 sudo systemctl stop apache2
 sudo systemctl disable apache2
 ```
 
 ---
 
-**Details:** Siehe [Schritt 3-6](#️-schritt-3-kind-cluster-erstellen-30-sekunden) für manuelle Schritte
+**Details:** See [Step 3-6](#️-step-3-create-kind-cluster-30-seconds) for manual steps
 
 ---
 
-## �🗂️ Inhaltsverzeichnis
+## 📗🗂️ Table of Contents
 
-1. [Nach Reboot - Cluster neu starten](#-nach-reboot---cluster-neu-starten) ⭐ **Neu!**
-2. [Was ist nach git clone schon da?](#-was-ist-nach-git-clone-schon-da)
-3. [System-Anforderungen](#-system-anforderungen)
-4. [Setup-Workflow](#-setup-workflow-von-null-zu-running)
-5. [Schritt 1: System Check](#-schritt-1-system-check)
-6. [Schritt 2: Tools installieren](#️-schritt-2-tools-installieren)
-7. [Schritt 3: Cluster erstellen](#️-schritt-3-kind-cluster-erstellen-30-sekunden)
-8. [Schritt 4: Ingress deployen](#-schritt-4-ingress-controller-deployen-45-sekunden)
-9. [Schritt 5: podinfo deployen](#-schritt-5-podinfo-deployen-20-sekunden)
-10. [Schritt 6: Erfolgskontrolle](#-schritt-6-erfolgskontrolle-30-sekunden)
-11. [Troubleshooting](#-troubleshooting---häufige-probleme)
+1. [After Reboot - Restart Cluster](#-after-reboot---restart-cluster) ⭐ **New!**
+2. [What's already here after git clone?](#-whats-already-here-after-git-clone)
+3. [System Requirements](#-system-requirements)
+4. [Setup Workflow](#-setup-workflow-from-zero-to-running)
+5. [Step 1: System Check](#-step-1-system-check)
+6. [Step 2: Install Tools](#️-step-2-install-tools)
+7. [Step 3: Create Cluster](#️-step-3-create-kind-cluster-30-seconds)
+8. [Step 4: Deploy Ingress](#-step-4-deploy-ingress-controller-45-seconds)
+9. [Step 5: Deploy podinfo](#-step-5-deploy-podinfo-20-seconds)
+10. [Step 6: Success Validation](#-step-6-success-validation-30-seconds)
+11. [Troubleshooting](#-troubleshooting---common-issues)
 12. [Cleanup & Reset](#-cleanup--reset)
-13. [Performance-Metriken](#-performance-metriken-referenz)
-14. [Nächste Schritte](#-nächste-schritte---was-jetzt)
+13. [Performance Metrics](#-performance-metrics-reference)
+14. [Next Steps](#-next-steps---whats-now)
 
 ---
 
-## 📦 Was ist nach `git clone` schon da?
-
-### **✅ Bereits in Git (NICHT neu erstellen!):**
+## 📦 What's already here after `git clone`?
 ```
 agent-ready-k8s/
 ├── apps/podinfo/base/           ← Kubernetes Manifeste (Deployment, Service, HPA)
@@ -195,7 +193,27 @@ agent-ready-k8s/
 
 ## 🚀 Setup-Workflow (Von Null zu Running)
 
-### **Übersicht:**
+### **Overview:**
+```
+1. System Check          → Check Ubuntu/Git/curl           (~10s)
+2. Tools Install         → Docker + K8s Tools              (~3min)
+   └─ 2.1 Docker         → Install + add user to group     (~90s + reboot)
+   └─ 2.2 K8s Tools      → kind, kubectl, helm, flux       (~60s)
+3. Cluster Create        → kind cluster with config        (~30s)
+4. Ingress Deploy        → ingress-nginx (LoadBalancer)    (~45s)
+5. podinfo Deploy        → Demo app with Ingress           (~20s)
+6. Success Check         → Pods + HTTP Endpoint            (~30s)
+```
+
+**Total runtime:** ~4-5 minutes (incl. Docker reboot)
+
+**After reboot:** Only 3-6 (~2 minutes, images cached!)
+
+---
+
+## 🔍 Step 1: System Check
+
+### **What are we checking?**
 ```
 1. System Check          (~1 min)   ← Prüfen was fehlt
 2. Tools installieren    (~2 min)   ← Docker, kind, kubectl, helm, flux
@@ -278,29 +296,39 @@ docker run hello-world
 
 ---
 
-### **2.2 Kubernetes Tools installieren** (~60 Sekunden)
+### **2.2 Install Kubernetes Tools** (~60 seconds)
 
 ```bash
-cd ~/agent-ready-k8s
+# kind (Kubernetes in Docker)
+curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
+chmod +x ./kind
+sudo mv ./kind /usr/local/bin/kind
 
-# Nutze unser Script (installiert: kind, kubectl, helm, flux, task)
-./setup-template/phase1/01-install-tools/install.sh
+# kubectl (Kubernetes CLI)
+curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+chmod +x kubectl
+sudo mv kubectl /usr/local/bin/kubectl
+
+# Helm (Package Manager)
+curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+# Flux CLI (GitOps)
+curl -s https://fluxcd.io/install.sh | sudo bash
+
+# Verify installations
+kind version
+kubectl version --client
+helm version
+flux version
 ```
 
-**Das Script installiert:**
-- `kind` v0.20.0 → Lokaler K8s Cluster
-- `kubectl` latest → Kubernetes CLI
-- `helm` v3.19.0 → Package Manager
-- `flux` v2.7.0 → GitOps Toolkit (für Phase 2)
-- `task` v3.45.4 → Task Runner (optional)
+**All tools installed!** ✅
 
-**Test:**
-```bash
-kind version        # kind v0.20.0 go1.20.4 linux/amd64
-kubectl version --client  # Client Version: v1.34.1
-helm version        # version.BuildInfo{Version:"v3.19.0"}
-flux version        # flux: v2.7.0
-```
+---
+
+## ☸️ Step 3: Create kind Cluster (~30 seconds)
+
+### **What happens here?**
 
 **Troubleshooting:**
 - **Fehler: "permission denied"** → Docker-Gruppe fehlt
@@ -506,14 +534,14 @@ kubectl get ingress -n tenant-demo
 
 ---
 
-## ✅ Schritt 6: Erfolgskontrolle (~30 Sekunden)
+## ✅ Step 6: Success Validation (~30 seconds)
 
-### **6.1 Alle Pods laufen?**
+### **6.1 All pods running?**
 ```bash
 kubectl get pods -A
 ```
 
-**Erwartung:**
+**Expected:**
 ```
 NAMESPACE        NAME                                        READY   STATUS    AGE
 ingress-nginx    ingress-nginx-controller-xxxxxxxxx-xxxxx    1/1     Running   1m
@@ -528,18 +556,18 @@ tenant-demo      podinfo-7d8b5c5f9d-xxxxx                    1/1     Running   3
 tenant-demo      podinfo-7d8b5c5f9d-yyyyy                    1/1     Running   30s
 ```
 
-**Alle müssen `Running` + `1/1 Ready` sein!**
+**All must be `Running` + `1/1 Ready`!**
 
 ---
 
-### **6.2 HTTP Endpoint antwortet?**
+### **6.2 HTTP endpoint responding?**
 
 #### **Option A: curl (Terminal)**
 ```bash
 curl http://demo.localhost
 ```
 
-**Erwartung:**
+**Expected:**
 ```json
 {
   "hostname": "podinfo-7d8b5c5f9d-xxxxx",
@@ -551,12 +579,12 @@ curl http://demo.localhost
 ```
 
 #### **Option B: Browser**
-Öffne: **http://demo.localhost**
+Open: **http://demo.localhost**
 
-**Erwartung:**
-- Blaues UI mit podinfo Logo
+**Expected:**
+- Blue UI with podinfo logo
 - Version: 6.9.2
-- Hostname zeigt Pod-Name
+- Hostname shows pod name
 - Tabs: Home, Status, Metrics, Swagger
 
 #### **Option C: Health Check**
@@ -564,14 +592,14 @@ curl http://demo.localhost
 curl http://demo.localhost/healthz
 ```
 
-**Erwartung:**
+**Expected:**
 ```json
 {"status":"ok"}
 ```
 
 ---
 
-### **6.3 Tests automatisch laufen lassen**
+### **6.3 Run tests automatically**
 ```bash
 cd ~/agent-ready-k8s
 
@@ -588,11 +616,11 @@ cd ~/agent-ready-k8s
 # Expected: 12/12 Tests ✅
 ```
 
-**Gesamt: 24/24 Tests sollten bestehen!**
+**Total: 24/24 tests should pass!**
 
 ---
 
-### **6.4 Was wenn HTTP 503?**
+### **6.4 What if HTTP 503?**
 
 **Problem:**
 ```bash
@@ -601,9 +629,9 @@ curl http://demo.localhost
 # <head><title>503 Service Temporarily Unavailable</title></head>
 ```
 
-**Ursache:** Ingress-Controller propagiert noch (10-15s nach Pod Ready)
+**Cause:** Ingress controller still propagating (10-15s after pod ready)
 
-**Lösung: Retry mit Backoff**
+**Solution: Retry with backoff**
 ```bash
 for i in {1..5}; do
   echo "Attempt $i/5..."
@@ -611,39 +639,39 @@ for i in {1..5}; do
 done
 ```
 
-**Falls immer noch 503:**
+**If still 503:**
 ```bash
-# Prüfe Ingress Status
+# Check Ingress status
 kubectl describe ingress podinfo -n tenant-demo
 
-# Prüfe Controller Logs
+# Check controller logs
 kubectl logs -n ingress-nginx -l app.kubernetes.io/name=ingress-nginx --tail=50
 
-# Prüfe /etc/hosts
+# Check /etc/hosts
 grep demo.localhost /etc/hosts || echo "127.0.0.1 demo.localhost" | sudo tee -a /etc/hosts
 ```
 
 ---
 
-## 🔍 Troubleshooting - Häufige Probleme
+## 🔍 Troubleshooting - Common Issues
 
 ### **Problem 1: Docker Permission Denied**
 ```
 Got permission denied while trying to connect to the Docker daemon socket
 ```
 
-**Ursache:** User nicht in `docker` Gruppe
+**Cause:** User not in `docker` group
 
-**Lösung:**
+**Solution:**
 ```bash
 sudo usermod -aG docker $USER
-newgrp docker  # Temporär, oder:
+newgrp docker  # Temporary, or:
 sudo reboot    # Persistent
 ```
 
 **Test:**
 ```bash
-docker ps  # Sollte KEINE Permission Error mehr zeigen
+docker ps  # Should NO longer show permission error
 ```
 
 ---
@@ -653,71 +681,71 @@ docker ps  # Sollte KEINE Permission Error mehr zeigen
 Error: failed to create cluster: ... address already in use
 ```
 
-**Ursache:** Anderer Prozess nutzt Port 80/443 (z.B. Apache, nginx)
+**Cause:** Another process is using port 80/443 (e.g. Apache, nginx)
 
-**Lösung:**
+**Solution:**
 ```bash
-# Finde Prozess
+# Find process
 sudo lsof -i :80
 sudo lsof -i :443
 
-# Beispiel: Apache stoppen
+# Example: Stop Apache
 sudo systemctl stop apache2
-sudo systemctl disable apache2  # Autostart deaktivieren
+sudo systemctl disable apache2  # Disable autostart
 
-# Cluster neu erstellen
+# Recreate cluster
 kind delete cluster --name agent-k8s-local
 ./setup-template/phase1/04-create-cluster/create.sh
 ```
 
 ---
 
-### **Problem 3: Pods bleiben in Pending/ContainerCreating**
+### **Problem 3: Pods stuck in Pending/ContainerCreating**
 ```bash
 kubectl get pods -A
-# STATUS: Pending oder ContainerCreating (>1 Minute)
+# STATUS: Pending or ContainerCreating (>1 minute)
 ```
 
-**Ursache:** Image-Download läuft noch (Docker Hub Rate Limit oder langsame Verbindung)
+**Cause:** Image download still running (Docker Hub rate limit or slow connection)
 
-**Lösung:**
+**Solution:**
 ```bash
-# Warte bis Pods ready (max 2 Minuten)
+# Wait until pods ready (max 2 minutes)
 kubectl wait --for=condition=ready pod --all -n ingress-nginx --timeout=120s
 kubectl wait --for=condition=ready pod --all -n tenant-demo --timeout=120s
 
-# Prüfe Events
+# Check events
 kubectl get events -n tenant-demo --sort-by='.lastTimestamp'
 
-# Prüfe Pod Details
+# Check pod details
 kubectl describe pod -n tenant-demo podinfo-xxxxx
 ```
 
-**Falls Docker Hub Rate Limit:**
+**If Docker Hub rate limit:**
 ```
 Warning  Failed     ... Error: ImagePullBackOff ... toomanyrequests
 ```
-→ Warten 5-10 Minuten, dann:
+→ Wait 5-10 minutes, then:
 ```bash
 kubectl rollout restart deployment podinfo -n tenant-demo
 ```
 
 ---
 
-### **Problem 4: demo.localhost nicht erreichbar**
+### **Problem 4: demo.localhost not reachable**
 ```bash
 curl http://demo.localhost
 # curl: (6) Could not resolve host: demo.localhost
 ```
 
-**Ursache:** `/etc/hosts` fehlt Eintrag
+**Cause:** `/etc/hosts` missing entry
 
-**Lösung:**
+**Solution:**
 ```bash
-# Eintrag hinzufügen
+# Add entry
 echo "127.0.0.1 demo.localhost" | sudo tee -a /etc/hosts
 
-# Prüfen
+# Verify
 cat /etc/hosts | grep demo.localhost
 # Expected: 127.0.0.1 demo.localhost
 
@@ -733,70 +761,70 @@ curl http://demo.localhost
 # <html><head><title>503 Service Temporarily Unavailable</title></head>
 ```
 
-**Ursache:** Ingress-Controller propagiert noch (~10-15s nach Pod Ready)
+**Cause:** Ingress controller still propagating (~10-15s after pod ready)
 
-**Lösung:**
+**Solution:**
 ```bash
-# Retry mit Backoff
+# Retry with backoff
 for i in {1..5}; do
   echo "Attempt $i/5..."
   curl -I http://demo.localhost && break || sleep 3
 done
 ```
 
-**Falls immer noch 503:**
+**If still 503:**
 ```bash
-# 1. Prüfe Ingress
+# 1. Check Ingress
 kubectl get ingress -n tenant-demo
-# ADDRESS sollte "localhost" sein
+# ADDRESS should be "localhost"
 
-# 2. Prüfe Backend
+# 2. Check backend
 kubectl get endpoints podinfo -n tenant-demo
-# Sollte Pod-IPs zeigen (z.B. 10.244.0.5:9898)
+# Should show pod IPs (e.g. 10.244.0.5:9898)
 
-# 3. Prüfe Controller Logs
+# 3. Check controller logs
 kubectl logs -n ingress-nginx -l app.kubernetes.io/name=ingress-nginx --tail=50 | grep demo.localhost
 
-# 4. Manual Port-Forward (Bypass Ingress)
+# 4. Manual port-forward (bypass Ingress)
 kubectl port-forward -n tenant-demo svc/podinfo 9898:9898 &
 curl http://localhost:9898
-# Falls das funktioniert → Ingress-Problem
+# If this works → Ingress problem
 ```
 
 ---
 
-### **Problem 6: Cluster existiert schon**
+### **Problem 6: Cluster already exists**
 ```
 Error: node(s) already exist for a cluster with the name "agent-k8s-local"
 ```
 
-**Lösung:**
+**Solution:**
 ```bash
-# Alten Cluster löschen
+# Delete old cluster
 kind delete cluster --name agent-k8s-local
 
-# Neu erstellen
+# Recreate
 ./setup-template/phase1/04-create-cluster/create.sh
 ```
 
 ---
 
-### **Problem 7: kubectl Befehle langsam (>5s)**
+### **Problem 7: kubectl commands slow (>5s)**
 
-**Ursache:** Cluster überlastet oder Docker Desktop zu wenig RAM
+**Cause:** Cluster overloaded or Docker Desktop has too little RAM
 
-**Lösung:**
+**Solution:**
 ```bash
-# 1. Prüfe Docker Stats
+# 1. Check Docker stats
 docker stats --no-stream
 
-# 2. Prüfe Node Resources
-kubectl top nodes  # Benötigt metrics-server
+# 2. Check node resources
+kubectl top nodes  # Requires metrics-server
 
-# 3. Reduziere Replicas
+# 3. Reduce replicas
 kubectl scale deployment podinfo -n tenant-demo --replicas=1
 
-# 4. Mehr RAM für Docker (in Docker Desktop Settings)
+# 4. More RAM for Docker (in Docker Desktop Settings)
 # Settings → Resources → Memory: 4GB → 8GB
 ```
 
@@ -804,42 +832,42 @@ kubectl scale deployment podinfo -n tenant-demo --replicas=1
 
 ## 🧹 Cleanup & Reset
 
-### **Szenario A: Nur Cluster löschen (Manifeste behalten)**
+### **Scenario A: Delete cluster only (keep manifests)**
 ```bash
-# Cluster löschen
+# Delete cluster
 kind delete cluster --name agent-k8s-local
 
-# kind-config.yaml löschen (wird neu erstellt)
+# Delete kind-config.yaml (will be recreated)
 rm kind-config.yaml
 
-# Neu starten bei Schritt 3
+# Restart at step 3
 ./setup-template/phase1/04-create-cluster/create.sh
 ./setup-template/phase1/05-deploy-ingress/deploy.sh
 ./setup-template/phase1/06-deploy-podinfo/deploy.sh
 ```
 
-**Use Case:** Cluster ist kaputt, Manifeste sind OK
+**Use case:** Cluster is broken, manifests are OK
 
 ---
 
-### **Szenario B: Komplett zurücksetzen (inkl. Manifeste)**
+### **Scenario B: Complete reset (incl. manifests)**
 ```bash
-# Cluster löschen
+# Delete cluster
 kind delete cluster --name agent-k8s-local
 
-# ALLE generierten Dateien löschen
+# Delete ALL generated files
 rm -rf apps/ clusters/ infrastructure/ policies/ kind-config.yaml
 
-# ⚠️ ACHTUNG: Git-Änderungen auch weg!
-git status  # Prüfe was verloren geht
-git restore apps/  # Falls du Git-Version wiederherstellen willst
+# ⚠️ WARNING: Git changes also gone!
+git status  # Check what will be lost
+git restore apps/  # If you want to restore Git version
 ```
 
-**Use Case:** Kompletter Neustart, Manifeste neu generieren
+**Use case:** Complete restart, regenerate manifests
 
 ---
 
-### **Szenario C: Nur Tools deinstallieren**
+### **Scenario C: Uninstall tools only**
 ```bash
 # kind
 sudo rm /usr/local/bin/kind
@@ -856,113 +884,113 @@ sudo rm /usr/local/bin/flux
 # task
 sudo snap remove task
 
-# Docker (VORSICHT: Löscht ALLE Container/Images!)
+# Docker (CAUTION: Deletes ALL containers/images!)
 sudo apt purge -y docker-ce docker-ce-cli containerd.io
 sudo rm -rf /var/lib/docker
 sudo rm -rf /var/lib/containerd
 ```
 
-**Use Case:** Maschine komplett aufräumen
+**Use case:** Completely clean up machine
 
 ---
 
-### **Szenario D: Nur podinfo neu deployen**
+### **Scenario D: Redeploy podinfo only**
 ```bash
-# Deployment löschen
+# Delete deployment
 kubectl delete namespace tenant-demo
 
-# Neu deployen
+# Redeploy
 ./setup-template/phase1/06-deploy-podinfo/deploy.sh
 
-# Oder manuell:
+# Or manually:
 kubectl create namespace tenant-demo
 kubectl apply -k apps/podinfo/tenants/demo/
 ```
 
-**Use Case:** podinfo-Manifeste geändert, testen
+**Use case:** podinfo manifests changed, testing
 
 ---
 
-## 📊 Performance-Metriken (Referenz)
+## 📊 Performance Metrics (Reference)
 
-### **Erwartete Runtimes (getestet auf Ubuntu 22.04, 16GB RAM, SSD):**
+### **Expected runtimes (tested on Ubuntu 22.04, 16GB RAM, SSD):**
 
 ```
-Schritt 1: System Check             ~10s    (nur Prüfung)
-Schritt 2.1: Docker installieren    ~90s    (inkl. apt update)
-  └─ REBOOT                         ~60s
-Schritt 2.2: K8s Tools              ~40s    (5 Binaries downloaden)
-Schritt 3: Cluster erstellen        ~17s    (kind create)
-Schritt 4: Ingress deployen         ~45s    (Helm install + Pod ready)
-Schritt 5: podinfo deployen         ~12s    (kubectl apply + Pods ready)
-Schritt 6: Erfolgskontrolle         ~10s    (curl + Tests)
+Step 1: System Check               ~10s    (check only)
+Step 2.1: Install Docker           ~90s    (incl. apt update)
+  └─ REBOOT                        ~60s
+Step 2.2: K8s Tools                ~40s    (download 5 binaries)
+Step 3: Create cluster             ~17s    (kind create)
+Step 4: Deploy Ingress             ~45s    (Helm install + pod ready)
+Step 5: Deploy podinfo             ~12s    (kubectl apply + pods ready)
+Step 6: Success validation         ~10s    (curl + tests)
 ──────────────────────────────────────────
-GESAMT (ohne Reboot):              ~3m 45s
-GESAMT (mit Reboot):               ~4m 45s
+TOTAL (without reboot):           ~3m 45s
+TOTAL (with reboot):              ~4m 45s
 
-Schneller Weg (setup-phase1.sh):   ~1m 10s  (Tools schon installiert)
+Fast track (setup-phase1.sh):     ~1m 10s  (tools already installed)
 ```
 
-### **Block-Details (für setup-phase1.sh):**
+### **Block details (for setup-phase1.sh):**
 ```
-Block 1 (Tools prüfen):      5s   ✅ (idempotent, überspringt wenn vorhanden)
-Block 2 (Struktur):          2s   ✅ (mkdir -p)
-Block 3 (Manifeste):         5s   ⚠️  (git clone, überschreibt apps/)
-Block 4 (Cluster):          17s   ✅ (kind + retry-logic)
-Block 5 (Ingress):          28s   ✅ (Helm + wait)
-Block 6 (podinfo):          13s   ✅ (kubectl apply + retry)
+Block 1 (Check tools):      5s   ✅ (idempotent, skips if exists)
+Block 2 (Structure):        2s   ✅ (mkdir -p)
+Block 3 (Manifests):        5s   ⚠️  (git clone, overwrites apps/)
+Block 4 (Cluster):         17s   ✅ (kind + retry logic)
+Block 5 (Ingress):         28s   ✅ (Helm + wait)
+Block 6 (podinfo):         13s   ✅ (kubectl apply + retry)
 ──────────────────────────────
-GESAMT:                  1m 10s   (46/46 Tests bestanden)
+TOTAL:                  1m 10s   (46/46 tests passed)
 ```
 
-### **Warum so schnell?**
-1. **kind statt minikube** - Docker-basiert, kein VM-Overhead
-2. **Parallel Deployments** - Ingress + podinfo nicht sequenziell
-3. **Retry-Logik** - Keine manuellen Waits nötig
-4. **Cached Images** - Docker Hub Images meist vorgeladen
+### **Why so fast?**
+1. **kind instead of minikube** - Docker-based, no VM overhead
+2. **Parallel deployments** - Ingress + podinfo not sequential
+3. **Retry logic** - No manual waits needed
+4. **Cached images** - Docker Hub images mostly preloaded
 
 ---
 
-## 🚀 Nächste Schritte - Was jetzt?
+## 🚀 Next Steps - What Now?
 
-### **1️⃣ Manifeste verstehen & anpassen**
+### **1️⃣ Understand & adjust manifests**
 
-#### **podinfo skalieren (manuell)**
+#### **Scale podinfo (manually)**
 ```bash
-# Replicas von 2 → 3
+# Replicas from 2 → 3
 vim apps/podinfo/tenants/demo/patch.yaml
-# Ändere: replicaCount: 3
+# Change: replicaCount: 3
 
-# Neu deployen
+# Redeploy
 kubectl apply -k apps/podinfo/tenants/demo/
 
-# Prüfen
+# Check
 kubectl get pods -n tenant-demo
-# Expected: 3 Pods
+# Expected: 3 pods
 ```
 
-#### **Eigene Änderungen in Git commiten**
+#### **Commit your own changes to Git**
 ```bash
 git add apps/podinfo/tenants/demo/patch.yaml
 git commit -m "feat: scale podinfo to 3 replicas"
 git push origin main
 ```
 
-**🎯 Wichtig für Phase 2:** Git = Single Source of Truth!
+**🎯 Important for Phase 2:** Git = Single Source of Truth!
 
 ---
 
-### **2️⃣ Zweite App deployen (nginx Beispiel)**
+### **2️⃣ Deploy second app (nginx example)**
 
 ```bash
-# Namespace erstellen
+# Create namespace
 kubectl create namespace my-app
 
-# nginx deployen
+# Deploy nginx
 kubectl create deployment nginx --image=nginx:latest -n my-app
 kubectl expose deployment nginx --port=80 --target-port=80 -n my-app
 
-# Ingress erstellen
+# Create Ingress
 cat <<EOF | kubectl apply -f -
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -984,24 +1012,24 @@ spec:
               number: 80
 EOF
 
-# /etc/hosts erweitern
+# Extend /etc/hosts
 echo "127.0.0.1 myapp.localhost" | sudo tee -a /etc/hosts
 
-# Testen
+# Test
 curl http://myapp.localhost
-# Expected: nginx Default-Page HTML
+# Expected: nginx default page HTML
 ```
 
 ---
 
-### **3️⃣ Multi-Tenancy testen (Production Tenant)**
+### **3️⃣ Test multi-tenancy (production tenant)**
 
 ```bash
-# Zweiten Tenant erstellen
+# Create second tenant
 kubectl create namespace tenant-prod
 kubectl label namespace tenant-prod tenant=prod
 
-# podinfo-prod deployen (3 Replicas, prod.localhost)
+# Deploy podinfo-prod (3 replicas, prod.localhost)
 kubectl create deployment podinfo-prod --image=ghcr.io/stefanprodan/podinfo:6.9.2 -n tenant-prod
 kubectl set resources deployment podinfo-prod -n tenant-prod \
   --requests=cpu=100m,memory=64Mi \
@@ -1009,7 +1037,7 @@ kubectl set resources deployment podinfo-prod -n tenant-prod \
 kubectl scale deployment podinfo-prod -n tenant-prod --replicas=3
 kubectl expose deployment podinfo-prod -n tenant-prod --port=9898 --target-port=9898
 
-# Ingress für prod
+# Ingress for prod
 cat <<EOF | kubectl apply -f -
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -1031,30 +1059,30 @@ spec:
               number: 9898
 EOF
 
-# /etc/hosts erweitern
+# Extend /etc/hosts
 echo "127.0.0.1 prod.localhost" | sudo tee -a /etc/hosts
 
-# Testen
+# Test
 curl http://prod.localhost
 # Expected: {"hostname":"podinfo-prod-xxx","version":"6.9.2"}
 ```
 
-**Jetzt hast du 2 Tenants:**
-- http://demo.localhost (2 Replicas)
-- http://prod.localhost (3 Replicas)
+**Now you have 2 tenants:**
+- http://demo.localhost (2 replicas)
+- http://prod.localhost (3 replicas)
 
 ---
 
-### **4️⃣ Phase 2 vorbereiten (GitOps mit FluxCD)**
+### **4️⃣ Prepare Phase 2 (GitOps with FluxCD)**
 
-#### **Was ist Phase 2?**
-- **GitOps:** Git-Push → Automatisches Deployment
-- **Flux:** Liest Git-Repo → Synchronisiert Cluster
-- **Production:** Azure AKS (Cloud-Cluster)
+#### **What is Phase 2?**
+- **GitOps:** Git push → Automatic deployment
+- **Flux:** Reads Git repo → Syncs cluster
+- **Production:** Azure AKS (cloud cluster)
 
-#### **Lokal Flux testen:**
+#### **Test Flux locally:**
 ```bash
-# Flux Bootstrap (verbindet Git mit Cluster)
+# Flux Bootstrap (connects Git with cluster)
 flux bootstrap github \
   --owner=ADASK-B \
   --repository=agent-ready-k8s \
@@ -1062,125 +1090,125 @@ flux bootstrap github \
   --path=clusters/local \
   --personal
 
-# Was passiert?
-# 1. Flux installed sich selbst in Cluster
-# 2. Erstellt GitRepository-Ressource (pointed auf dieses Repo)
-# 3. Erstellt Kustomization-Ressource (watched apps/)
-# 4. Deployed alles aus Git automatisch!
+# What happens?
+# 1. Flux installs itself in cluster
+# 2. Creates GitRepository resource (points to this repo)
+# 3. Creates Kustomization resource (watches apps/)
+# 4. Deploys everything from Git automatically!
 
-# Prüfen
+# Check
 flux get kustomizations
 flux get sources git
 
-# Git-Push deployed automatisch:
+# Git push deploys automatically:
 vim apps/podinfo/tenants/demo/patch.yaml
 # replicaCount: 2 → 4
 git commit -am "feat: scale to 4 replicas"
 git push
 
-# Flux reconciled (1-2 Minuten)
+# Flux reconciles (1-2 minutes)
 flux reconcile kustomization flux-system --with-source
 kubectl get pods -n tenant-demo -w
-# Expected: 4 Pods nach ~30s
+# Expected: 4 pods after ~30s
 ```
 
-**📚 Siehe:** `ROADMAP.md` → Block 10-13 (Phase 2 Details)
+**📚 See:** `ROADMAP.md` → Blocks 10-13 (Phase 2 details)
 
 ---
 
 ### **5️⃣ Monitoring & Observability (Optional)**
 
-#### **Logs anschauen:**
+#### **View logs:**
 ```bash
-# podinfo Logs
+# podinfo logs
 kubectl logs -n tenant-demo -l app=podinfo --tail=50 -f
 
-# Ingress Logs
+# Ingress logs
 kubectl logs -n ingress-nginx -l app.kubernetes.io/name=ingress-nginx --tail=50 -f
 ```
 
-#### **Metrics-Server installieren:**
+#### **Install metrics-server:**
 ```bash
 kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
 
-# Patch für kind (insecure TLS)
+# Patch for kind (insecure TLS)
 kubectl patch deployment metrics-server -n kube-system --type='json' \
   -p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]'
 
-# Warten
+# Wait
 kubectl wait --for=condition=ready pod -n kube-system -l k8s-app=metrics-server --timeout=60s
 
-# Nutzen
+# Use
 kubectl top nodes
 kubectl top pods -n tenant-demo
 ```
 
-#### **k9s installieren (Terminal UI):**
+#### **Install k9s (terminal UI):**
 ```bash
 # Installation
 curl -sS https://webinstall.dev/k9s | bash
 source ~/.config/envman/PATH.env
 
-# Starten
+# Start
 k9s
 
 # Navigation:
-# :pods → Alle Pods
+# :pods → All pods
 # :svc → Services
 # :ing → Ingresses
-# / → Suchen
-# l → Logs anzeigen
+# / → Search
+# l → Show logs
 # d → Describe
 # Ctrl+C → Exit
 ```
 
 ---
 
-### **6️⃣ Weitere Lern-Ressourcen**
+### **6️⃣ More learning resources**
 
-#### **Kubernetes Basics:**
+#### **Kubernetes basics:**
 - [Kubernetes Docs](https://kubernetes.io/docs/home/)
 - [kubectl Cheat Sheet](https://kubernetes.io/docs/reference/kubectl/cheatsheet/)
 
-#### **GitOps mit Flux:**
+#### **GitOps with Flux:**
 - [Flux Docs](https://fluxcd.io/flux/)
 - [Flux Bootstrap Guide](https://fluxcd.io/flux/installation/bootstrap/)
 - [Flux Kustomize Guide](https://fluxcd.io/flux/guides/kustomize/)
 
-#### **kind Best Practices:**
+#### **kind best practices:**
 - [kind Docs](https://kind.sigs.k8s.io/)
 - [kind Ingress Guide](https://kind.sigs.k8s.io/docs/user/ingress/)
 
-#### **podinfo (Demo-App):**
+#### **podinfo (demo app):**
 - [podinfo GitHub](https://github.com/stefanprodan/podinfo)
 - [podinfo API Docs](https://github.com/stefanprodan/podinfo#api)
 
 ---
 
-## 📚 Weitere Dokumentation
+## 📚 More Documentation
 
-- **Detaillierte Roadmap:** `ROADMAP.md` (Phase 1 + Phase 2 Checklisten)
-- **Projekt-Übersicht:** `README.md` (Was ist das Projekt, für wen)
-- **Script-Referenz:** `.github/copilot-instructions.md` (Inhaltsverzeichnis für AI)
-- **Phase 2 Planning:** `ROADMAP.md` → Block 10-13 (GitOps + AKS)
+- **Detailed Roadmap:** `ROADMAP.md` (Phase 1 + Phase 2 checklists)
+- **Project Overview:** `README.md` (What is the project, for whom)
+- **Script Reference:** `.github/copilot-instructions.md` (Table of contents for AI)
+- **Phase 2 Planning:** `ROADMAP.md` → Blocks 10-13 (GitOps + AKS)
 
 ---
 
-## 🎯 Zusammenfassung
+## 🎯 Summary
 
-### **Was hast du gebaut?**
-✅ Lokalen Kubernetes-Cluster (kind)  
-✅ Ingress-Controller (nginx)  
-✅ Demo-App (podinfo v6.9.2)  
-✅ Multi-Tenant Setup (tenant-demo Namespace)  
-✅ GitOps-Ready Struktur (für Phase 2)
+### **What did you build?**
+✅ Local Kubernetes cluster (kind)  
+✅ Ingress controller (nginx)  
+✅ Demo app (podinfo v6.9.2)  
+✅ Multi-tenant setup (tenant-demo namespace)  
+✅ GitOps-ready structure (for Phase 2)
 
-### **Was kannst du jetzt?**
-✅ Manifeste anpassen (apps/podinfo/)  
-✅ Eigene Apps deployen (kubectl apply)  
-✅ Tests laufen (setup-template/phase1/*/test.sh)  
-✅ Phase 2 starten (Flux Bootstrap)
+### **What can you do now?**
+✅ Adjust manifests (apps/podinfo/)  
+✅ Deploy your own apps (kubectl apply)  
+✅ Run tests (setup-template/phase1/*/test.sh)  
+✅ Start Phase 2 (Flux Bootstrap)
 
-### **Nächster Milestone:**
-🎯 **Phase 2:** GitOps mit Flux + Azure AKS Deployment  
-📅 **Siehe:** `ROADMAP.md` → Block 10-13
+### **Next milestone:**
+🎯 **Phase 2:** GitOps with Flux + Azure AKS deployment  
+📅 **See:** `ROADMAP.md` → Blocks 10-13
