@@ -102,7 +102,7 @@ fi
 
 # Test Kubernetes version
 log_test "Kubernetes Version"
-k8s_version=$(kubectl version --short 2>/dev/null | grep "Server Version" | awk '{print $3}' || echo "unknown")
+k8s_version=$(kubectl version 2>/dev/null | grep -oP 'Server Version: \K[^,}]+' | head -1 || kubectl get nodes -o jsonpath='{.items[0].status.nodeInfo.kubeletVersion}' 2>/dev/null || echo "unknown")
 if [ "$k8s_version" != "unknown" ]; then
   log_pass "Kubernetes version: $k8s_version"
 else

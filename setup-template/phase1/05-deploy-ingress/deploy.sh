@@ -77,16 +77,16 @@ log_info "Creating namespace..."
 kubectl create namespace ingress-nginx
 log_success "Namespace created"
 
-# Deploy ingress-nginx (kind-compatible NodePort)
+# Deploy ingress-nginx (kind-compatible with hostPort)
 log_info "Deploying ingress-nginx (this takes ~90 seconds)..."
 helm install ingress-nginx ingress-nginx/ingress-nginx \
   --namespace ingress-nginx \
-  --set controller.service.type=NodePort \
-  --set controller.service.nodePorts.http=80 \
-  --set controller.service.nodePorts.https=443 \
   --set controller.hostPort.enabled=true \
   --set controller.hostPort.ports.http=80 \
   --set controller.hostPort.ports.https=443 \
+  --set controller.service.type=NodePort \
+  --set controller.updateStrategy.type=RollingUpdate \
+  --set controller.updateStrategy.rollingUpdate.maxUnavailable=1 \
   --wait \
   --timeout 5m
 log_success "ingress-nginx deployed"
