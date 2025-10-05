@@ -107,7 +107,7 @@ A fully automated Kubernetes setup for local development (Phase 1) with optional
 ### **Phase 1 - Local (✅ COMPLETED)**
 - **Container:** Docker 28.5.0
 - **K8s:** kind v0.20.0 (Cluster: agent-k8s-local, K8s v1.27.3)
-- **Tools:** kubectl v1.34.1, Helm v3.19.0, Flux CLI v2.7.0, Task 3.45.4
+- **Tools:** kubectl v1.34.1, Helm v3.19.0, Flux CLI v2.7.0, k9s (latest), Task 3.45.4
 - **Ingress:** ingress-nginx (hostPort mode for kind)
 - **Demo App:** podinfo v6.9.2 (2 replicas)
 - **URL:** http://demo.localhost

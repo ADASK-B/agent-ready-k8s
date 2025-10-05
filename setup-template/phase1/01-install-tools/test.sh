@@ -12,6 +12,7 @@
 #   - kubectl
 #   - Helm
 #   - Flux CLI
+#   - k9s
 #
 # Exit codes:
 #   0 = All tests passed
@@ -103,6 +104,14 @@ if command -v flux &> /dev/null; then
   log_pass "Flux CLI installed: $(flux version --client 2>&1 | grep 'flux:' || flux version --client)"
 else
   log_fail "Flux CLI not installed"
+fi
+
+# Test k9s
+log_test "k9s"
+if command -v k9s &> /dev/null; then
+  log_pass "k9s installed: $(k9s version --short 2>/dev/null || k9s version 2>&1 | head -1)"
+else
+  log_fail "k9s not installed"
 fi
 
 # Test Task (optional)

@@ -12,6 +12,7 @@
 #   - kubectl
 #   - Helm
 #   - Flux CLI
+#   - k9s (Terminal UI for Kubernetes)
 #   - Task (optional)
 #
 # Usage:
@@ -101,6 +102,21 @@ if ! command -v flux &> /dev/null; then
   log_success "Flux installed: $(flux version --client)"
 else
   log_success "Flux already installed: $(flux version --client)"
+fi
+
+# Install k9s (Terminal UI for Kubernetes)
+log_info "Installing k9s..."
+if ! command -v k9s &> /dev/null; then
+  curl -sS https://webinstall.dev/k9s | bash
+  # Source the PATH update
+  export PATH="$HOME/.local/bin:$PATH"
+  if command -v k9s &> /dev/null; then
+    log_success "k9s installed: $(k9s version --short 2>/dev/null || k9s version 2>&1 | head -1)"
+  else
+    log_warning "k9s installed but not in PATH yet. Run: source ~/.config/envman/PATH.env"
+  fi
+else
+  log_success "k9s already installed: $(k9s version --short 2>/dev/null || k9s version 2>&1 | head -1)"
 fi
 
 # Install Task (optional)
