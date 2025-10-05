@@ -36,25 +36,129 @@ cd ~/agent-ready-k8s
 
 ## 🔄 After Reboot - Restart Cluster
 
-**Situation:** You restarted your machine, cluster is gone.
+**Situation:** You restarted your machine, cluster might be stopped.
 
-### **What's still there?**
-- ✅ Docker (starts automatically)
-- ✅ Tools (kind, kubectl, helm, flux)
-- ✅ Git repo (apps/, manifests)
-- ✅ Docker images (cached!)
+---
 
-### **What's missing?**
-- ❌ kind cluster (container stopped)
-- ❌ All pods (gone with cluster)
+### **🤖 For AI Agents: Smart Restart Decision Tree**
 
-### **Quick Commands (Copy-Paste):**
+**Step 1: Check what exists**
+```bash
+# Does cluster exist?
+kind get clusters 2>/dev/null | grep -q "agent-k8s-local"
+# Exit code 0 = exists, 1 = doesn't exist
 
-#### **Option 1: Cluster only (Manifests unchanged) - ~1 min**
+# Is cluster responding?
+kubectl cluster-info --context kind-agent-k8s-local 2>&1 | grep -q "is running"
+# Exit code 0 = works, 1 = stopped/broken
+```
+
+**Step 2: Decide action based on checks**
+
+| Check Result | Action | Reason |
+|-------------|--------|---------|
+| Cluster doesn't exist | Run: `04-create-cluster/create.sh` | Need fresh cluster |
+| Cluster exists but stopped | Delete first, then recreate | Container stopped, can't restart kind containers |
+| Cluster works | Skip cluster creation! | Already running, save time |
+| Cluster works but 503 error | Only redeploy Ingress + podinfo | Cluster OK, apps need restart |
+
+**Step 3: Execute minimal actions**
+
+```bash
+# Scenario A: No cluster exists
+if ! kind get clusters 2>/dev/null | grep -q "agent-k8s-local"; then
+  echo "📦 No cluster, creating..."
+  ./setup-template/phase1/04-create-cluster/create.sh
+  ./setup-template/phase1/05-deploy-ingress/deploy.sh
+  ./setup-template/phase1/06-deploy-podinfo/deploy.sh
+  
+# Scenario B: Cluster exists but stopped
+elif ! kubectl cluster-info --context kind-agent-k8s-local 2>&1 | grep -q "is running"; then
+  echo "❌ Cluster stopped, recreating..."
+  kind delete cluster --name agent-k8s-local
+  ./setup-template/phase1/04-create-cluster/create.sh
+  ./setup-template/phase1/05-deploy-ingress/deploy.sh
+  ./setup-template/phase1/06-deploy-podinfo/deploy.sh
+  
+# Scenario C: Cluster works
+else
+  echo "✅ Cluster running! Testing endpoint..."
+  if curl -f http://demo.localhost >/dev/null 2>&1; then
+    echo "🎉 Everything works! Nothing to do."
+  else
+    echo "⚠️  Cluster OK but endpoint fails, redeploying apps..."
+    ./setup-template/phase1/05-deploy-ingress/deploy.sh
+    ./setup-template/phase1/06-deploy-podinfo/deploy.sh
+  fi
+fi
+```
+
+**Why this is smart:**
+- ✅ Checks **before** deleting
+- ✅ Minimal actions (don't recreate if not needed)
+- ✅ Detects: no cluster, stopped cluster, working cluster
+- ✅ Saves time when cluster still works
+
+---
+
+### **👤 For Humans: Quick Commands**
+
+**First: Check status** (always do this!)
+```bash
+# Does cluster exist?
+kind get clusters
+# Output: "agent-k8s-local" = exists, empty = doesn't exist
+
+# Is it working?
+kubectl cluster-info --context kind-agent-k8s-local
+# "is running" = works ✅
+# "Unable to connect" = stopped ❌
+```
+
+---
+
+#### **Option 1: Smart restart (checks first)**
+
+**Copy-paste this** (works for all scenarios):
 ```bash
 cd ~/agent-ready-k8s
 
-# Cluster + Ingress + podinfo (uses Git manifests)
+# Check and decide
+if ! kind get clusters 2>/dev/null | grep -q "agent-k8s-local"; then
+  echo "📦 Creating new cluster..."
+  ./setup-template/phase1/04-create-cluster/create.sh
+elif ! kubectl cluster-info --context kind-agent-k8s-local 2>&1 | grep -q "is running"; then
+  echo "❌ Cluster stopped, deleting and recreating..."
+  kind delete cluster --name agent-k8s-local
+  ./setup-template/phase1/04-create-cluster/create.sh
+else
+  echo "✅ Cluster already running, skipping creation!"
+fi
+
+# Always redeploy apps (fast, idempotent)
+./setup-template/phase1/05-deploy-ingress/deploy.sh
+./setup-template/phase1/06-deploy-podinfo/deploy.sh
+
+# Test
+curl http://demo.localhost
+```
+
+**Runtime:** 
+- Cluster exists + works: ~1 min (only redeploy apps)
+- Cluster stopped: ~2 min (delete + recreate + apps)
+
+---
+
+#### **Option 2: Force fresh start (always delete)**
+
+**Use when:** You want guaranteed clean state
+```bash
+cd ~/agent-ready-k8s
+
+# Delete if exists
+kind delete cluster --name agent-k8s-local 2>/dev/null || true
+
+# Recreate everything
 ./setup-template/phase1/04-create-cluster/create.sh  # ~17s
 ./setup-template/phase1/05-deploy-ingress/deploy.sh  # ~45s
 ./setup-template/phase1/06-deploy-podinfo/deploy.sh  # ~12s
@@ -62,22 +166,37 @@ cd ~/agent-ready-k8s
 # Test
 curl http://demo.localhost
 ```
+# Test
+curl http://demo.localhost
+```
 
-**Runtime:** ~1-2 minutes (images cached!)  
-**Uses:** Manifests from Git (NOT overwritten)
+**Runtime:** ~2 min (always recreates cluster)
 
 ---
 
-#### **Option 2: Fully automated - ~1 min 10s**
+#### **Option 3: Full automation (overwrites Git manifests!)**
+
+**⚠️ WARNING:** Uses setup-phase1.sh which asks about deleting cluster!
 ```bash
 cd ~/agent-ready-k8s
 ./setup-template/setup-phase1.sh
 ```
 
-**⚠️ WARNING:** Overwrites `apps/podinfo/` with FluxCD templates!  
-**Only use if:** You want to reset manifests
+**Overwrites:** `apps/podinfo/` from Git templates  
+**Use when:** You want to reset manifests to defaults
 
 ---
+
+### **What persists after reboot?**
+- ✅ Docker (auto-starts on boot)
+- ✅ Tools (kind, kubectl, helm, flux)
+- ✅ Git repo (apps/, clusters/, manifests)
+- ✅ Docker images (cached! ~770MB)
+
+### **What's lost after reboot?**
+- ❌ kind cluster (Docker container stops)
+- ❌ All pods (namespaces gone)
+- ❌ Ingress controller (needs redeploy)
 
 ### **Why so fast after reboot?**
 Docker has cached images:
