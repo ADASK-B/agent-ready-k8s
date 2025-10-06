@@ -5,7 +5,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Kubernetes](https://img.shields.io/badge/Kubernetes-1.28+-blue.svg)](https://kubernetes.io/)
-[![Flux](https://img.shields.io/badge/Flux-2.2+-purple.svg)](https://fluxcd.io/)
+[![Argo CD](https://img.shields.io/badge/Argo%20CD-2.9+-purple.svg)](https://argo-cd.readthedocs.io/)
 
 ---
 
@@ -35,7 +35,7 @@
 Ein **vollständiger Kubernetes-Stack** für die Entwicklung von Multi-Tenant-SaaS-Anwendungen, der:
 - ✅ **Lokal auf Ubuntu** läuft (kind-Cluster)
 - ✅ **Security-First** ist (Trivy, Gitleaks, OPA vor jedem Commit)
-- ✅ **GitOps-Native** arbeitet (Flux reconciled automatisch)
+- ✅ **GitOps-Native** arbeitet (Argo CD reconciled automatisch)
 - ✅ **Agent-steuerbar** ist (alle Workflows via CLI/Task)
 - ✅ **Cloud-ready** ist (Git Push → automatisches AKS-Deployment)
 - ✅ **100% Open Source** ist (keine Vendor-Lock-ins)
@@ -68,7 +68,7 @@ Ein **vollständiger Kubernetes-Stack** für die Entwicklung von Multi-Tenant-Sa
 │                                                                     │
 │  5. Tenant deployen & testen                                       │
 │     ├─→ task tenant:create TENANT=demo                             │
-│     ├─→ Flux reconciled GitOps-Manifeste                           │
+│     ├─→ Argo CD synced GitOps-Manifeste                           │
 │     ├─→ http://demo.localhost → Chat läuft!                        │
 │     └─→ Smoke-Tests (kubectl wait, curl-Tests)                    │
 │                                                                     │
@@ -101,10 +101,10 @@ Ein **vollständiger Kubernetes-Stack** für die Entwicklung von Multi-Tenant-Sa
 │      ├─→ Trivy Scan (nochmal in CI)                                │
 │      └─→ kubectl apply --dry-run (Syntax-Check)                   │
 │                                                                     │
-│  11. Flux im AKS-Cluster bemerkt neuen Commit                      │
+│  11. Argo CD in AKS-Cluster bemerkt neuen Commit                      │
 │      ├─→ Flux pollt Git-Repo (alle 5 Minuten)                     │
-│      ├─→ Flux Source Controller: "Neuer Commit!"                  │
-│      └─→ Flux Kustomize Controller reconciled                      │
+│      ├─→ Argo CD Application Controller: "Neuer Commit!"                  │
+│      └─→ Argo CD Sync reconciled                      │
 │                                                                     │
 │  12. Production-Deploy                                             │
 │      ├─→ kubectl apply -k apps/chat-saas/tenants/acme/            │
@@ -218,7 +218,7 @@ Ein **vollständiger Kubernetes-Stack** für die Entwicklung von Multi-Tenant-Sa
 | **Docker Engine CE** | ≥24.0 | Standard-Container-Runtime, große Community | Podman (rootless) | ✅ Ja |
 | **kind** | ≥0.20 | Upstream-K8s, 100% Parität zu AKS | k3d (schneller, aber k3s) | ✅ Ja |
 | **kubectl** | ≥1.28 | Standard-K8s-CLI | k9s (UI, nicht agent-friendly) | ✅ Ja |
-| **Flux CLI** | ≥2.2 | GitOps-Standard, CNCF-Projekt | ArgoCD (UI-fokussiert) | ✅ Ja |
+| **Argo CD CLI** | ≥2.2 | GitOps-Standard, CNCF-Projekt | ArgoCD (UI-fokussiert) | ✅ Ja |
 | **Helm** | ≥3.13 | Paket-Manager für K8s | Kustomize (simpler, aber weniger Features) | ✅ Ja |
 | **Trivy** | ≥0.48 | Schnellster CVE-Scanner, 0 false-positives | Clair (langsamer) | ✅ Ja |
 | **Gitleaks** | ≥8.18 | Bester Secret-Scanner | truffleHog (langsamer) | ✅ Ja |
@@ -327,7 +327,7 @@ kubectl logs -f deployment/chat-saas -n tenant-demo
 
 ---
 
-#### **4. Flux CLI** (GitOps-Engine)
+#### **4. Argo CD CLI** (GitOps-Engine)
 
 ```bash
 # Installation
@@ -975,7 +975,7 @@ sudo reboot
 ### **2. Lokalen Cluster erstellen**
 
 ```bash
-# Kind-Cluster erstellen + Flux bootstrappen
+# Kind-Cluster erstellen + Argo CD installationpen
 task cluster:create
 
 # Warten bis Flux bereit ist
@@ -1172,7 +1172,7 @@ az aks create \
 # 5. Credentials holen
 az aks get-credentials --resource-group agent-k8s-rg --name agent-k8s-prod
 
-# 6. Flux im AKS bootstrappen
+# 6. Argo CD in AKS bootstrappen
 flux bootstrap github \
   --owner=ADASK-B \
   --repository=agent-ready-k8s-stack \
@@ -1479,7 +1479,7 @@ MIT License - siehe [LICENSE](LICENSE)
 
 This template is built upon best practices from leading open-source projects:
 
-- **[FluxCD flux2-kustomize-helm-example](https://github.com/fluxcd/flux2-kustomize-helm-example)** (Apache-2.0)  
+- **[Argo CD podinfo](https://github.com/fluxcd/podinfo)** (Apache-2.0)  
   → GitOps patterns, Kustomize layouts, repository structure
   
 - **[podinfo](https://github.com/stefanprodan/podinfo)** by Stefan Prodan (Apache-2.0)  

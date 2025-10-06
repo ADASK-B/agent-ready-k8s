@@ -11,7 +11,7 @@
 #   - kind
 #   - kubectl
 #   - Helm
-#   - Flux CLI
+#   - Argo CD CLI
 #   - k9s
 #
 # Exit codes:
@@ -98,12 +98,12 @@ else
   log_fail "Helm not installed"
 fi
 
-# Test Flux CLI
-log_test "Flux CLI"
-if command -v flux &> /dev/null; then
-  log_pass "Flux CLI installed: $(flux version --client 2>&1 | grep 'flux:' || flux version --client)"
+# Test Argo CD CLI
+log_test "Argo CD CLI"
+if command -v argocd &> /dev/null; then
+  log_pass "Argo CD CLI installed: $(argocd version --client --short 2>&1 | head -1)"
 else
-  log_fail "Flux CLI not installed"
+  log_fail "Argo CD CLI not installed"
 fi
 
 # Test k9s

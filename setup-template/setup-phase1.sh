@@ -6,11 +6,11 @@
 # ROADMAP: Phase 1 (Blocks 1-7)
 # Runtime: ~4-5 minutes total
 #
-# Blocks:
-#   01: Install Tools (Docker, kind, kubectl, Helm, Flux, Task)
-#   02: Create Project Structure (GitOps folders)
-#   03: Clone Template Manifests (FluxCD example → podinfo)
-#   04: Create kind Cluster (agent-k8s-local)
+# Blocks Overview:
+# 01: Install Tools (Docker, kind, kubectl, Helm, Argo CD, Task)
+# 02: Create Project Structure (apps/, clusters/, infrastructure/, policies/)
+# 03: Clone Template Manifests (podinfo demo application)
+# 04: Create kind Cluster (agent-k8s-local)
 #   05: Deploy Ingress-Nginx (Helm)
 #   06: Deploy podinfo Demo (Helm)
 #
@@ -69,7 +69,7 @@ log_header "🚀 Phase 1: Complete Template Setup                   "
 echo -e "${CYAN}This will:${RESET}"
 echo "  1. Install required tools"
 echo "  2. Create GitOps project structure"
-echo "  3. Clone podinfo manifests from FluxCD example"
+echo "  3. Clone podinfo manifests from demo template"
 echo "  4. Create local kind cluster"
 echo "  5. Deploy ingress-nginx controller"
 echo "  6. Deploy podinfo demo application"

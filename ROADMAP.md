@@ -36,7 +36,7 @@ git commit & push
     ↓
 GitHub Actions (Security-Scans, Build)
     ↓
-Flux in AKS zieht Update
+Argo CD in AKS zieht Update
     ↓
 ✅ App läuft in Azure Cloud
 ```
@@ -86,12 +86,15 @@ Flux in AKS zieht Update
   - **Test:** `kubectl version --client` ✅
   - **Installiert:** Client Version: v1.34.1
 
-- [x] **1.4 Flux CLI installieren** ✅
+- [x] **1.4 Argo CD CLI installieren** ✅
   ```bash
-  curl -s https://fluxcd.io/install.sh | sudo bash
+  ARGOCD_VERSION=$(curl -s https://api.github.com/repos/argoproj/argo-cd/releases/latest | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+  curl -sSL -o /tmp/argocd-linux-amd64 "https://github.com/argoproj/argo-cd/releases/download/${ARGOCD_VERSION}/argocd-linux-amd64"
+  sudo install -m 555 /tmp/argocd-linux-amd64 /usr/local/bin/argocd
+  rm /tmp/argocd-linux-amd64
   ```
-  - **Test:** `flux version` ✅
-  - **Installiert:** flux: v2.7.0
+  - **Test:** `argocd version --client` ✅
+  - **Installiert:** argocd: v2.13+ (latest)
 
 - [x] **1.5 Helm installieren** ✅
   ```bash
@@ -234,10 +237,10 @@ Flux in AKS zieht Update
 
 | Quelle | Datei/Ordner im Original | Ziel in unserem Projekt | Zweck | Status |
 |--------|--------------------------|-------------------------|-------|--------|
-| **Flux Example** | `apps/base/podinfo/` | `apps/podinfo/base/` | HelmRelease + Kustomization für podinfo | ✅ |
-| **Flux Example** | `apps/staging/podinfo/` | `apps/podinfo/tenants/demo/` | Tenant-spezifische Overlays | ✅ Fallback |
-| **Flux Example** | `clusters/staging/` | `clusters/local/` | Flux-Kustomization für lokalen Cluster | ⏸️ Phase 2 |
-| **Flux Example** | `infrastructure/` | `infrastructure/` | Ingress-Nginx, Sealed Secrets HelmReleases | ⏸️ Phase 2 |
+| **podinfo Repo** | `kustomize/` | `apps/podinfo/base/` | Standard K8s Manifests (Deployment, Service) | ✅ |
+| **podinfo Repo** | `kustomize/` | `apps/podinfo/tenants/demo/` | Tenant-spezifische Overlays (Ingress) | ✅ |
+| **Argo CD Apps** | (manuell erstellt) | `clusters/local/` | Argo CD Applications für lokalen Cluster | ⏸️ Phase 2 |
+| **Argo CD Apps** | (manuell erstellt) | `infrastructure/` | Ingress-Nginx, Sealed Secrets als Argo Apps | ⏸️ Phase 2 |
 | **podinfo Helm Chart** | (via `helm repo add`) | Deployed in `tenant-demo` Namespace | Demo-Webserver für Tests | ✅ |
 
 **✅ Nach Block 4:** Alle GitOps-Manifeste (HelmRelease, Kustomization) liegen bereit
@@ -278,30 +281,27 @@ Flux in AKS zieht Update
 - **Script:** `./setup-template/phase1/03-clone-templates/clone.sh`
 - **Test:** `./setup-template/phase1/03-clone-templates/test.sh`
 - **Runtime:** ~5 Sekunden
-- **Hinweis:** FluxCD Repo-Struktur hat sich geändert, Fallback-Manifeste werden erstellt
+- **Hinweis:** Erstellt standard Kubernetes Manifeste (Deployment, Service, Ingress)
 
 ---
 
 #### **⏸️ Option B: Manuelle Setup** (nicht benötigt, Automation funktioniert)
 
-- [ ] **4.3 Flux Example-Repo clonen**
+- [ ] **4.3 podinfo-Repo clonen** (für Manifest-Beispiele)
   ```bash
   cd /tmp
-  git clone --depth 1 https://github.com/fluxcd/flux2-kustomize-helm-example.git flux-example
-  cd flux-example
+  git clone --depth 1 https://github.com/stefanprodan/podinfo.git
+  cd podinfo
   tree -L 3  # Struktur ansehen
   ```
 
-- [ ] **4.4 podinfo-Struktur übernehmen**
+- [ ] **4.4 podinfo-Manifeste erstellen**
   ```bash
   cd /home/arthur/Dev/agent-ready-k8s
   
-  # Base-Manifeste kopieren (wenn im Flux-Repo vorhanden)
-  if [ -d "/tmp/flux-example/apps/base/podinfo" ]; then
-    cp -r /tmp/flux-example/apps/base/podinfo/* apps/podinfo/base/
-  fi
-  
-  # Alternativ: Eigene Manifeste erstellen (siehe unten)
+  # Standard Kubernetes Manifeste erstellen
+  # Deployment, Service, Ingress für podinfo
+  # (siehe Fallback-Sektion unten für Beispiele)
   ```
 
 - [ ] **4.5 Kustomization-Files anpassen**
@@ -318,11 +318,11 @@ Flux in AKS zieht Update
 
   This project uses code and patterns from the following open-source projects:
 
-  ## FluxCD flux2-kustomize-helm-example
-  - **Source:** https://github.com/fluxcd/flux2-kustomize-helm-example
+  ## Argo CD
+  - **Source:** https://github.com/argoproj/argo-cd
   - **License:** Apache-2.0
-  - **Copyright:** Cloud Native Computing Foundation (CNCF)
-  - **Usage:** Repository structure, GitOps patterns, Kustomize layouts
+  - **Copyright:** Argo Project Authors
+  - **Usage:** GitOps continuous delivery tool for Kubernetes
 
   ## podinfo (Demo Application)
   - **Source:** https://github.com/stefanprodan/podinfo
@@ -345,14 +345,14 @@ Flux in AKS zieht Update
   ---
 
   **Note:** All third-party components retain their original licenses.
-  This project (agent-ready-k8s-stack) is licensed under MIT (see LICENSE).
+  This project (agent-ready-k8s) is licensed under MIT (see LICENSE).
   EOF
   ```
 
 - [ ] **4.7 Git-History bereinigen**
   ```bash
   # Temp-Repos löschen (keine .git-History übernehmen!)
-  rm -rf /tmp/flux-example
+  rm -rf /tmp/podinfo
   rm -rf /tmp/aks-baseline-automation
   ```
 
@@ -364,7 +364,7 @@ Flux in AKS zieht Update
   ## 🙏 Credits & Attributions
 
   This template is built upon best practices from:
-  - [FluxCD flux2-kustomize-helm-example](https://github.com/fluxcd/flux2-kustomize-helm-example) (Apache-2.0)
+  - [Argo CD](https://github.com/argoproj/argo-cd) - GitOps continuous delivery (Apache-2.0)
   - [podinfo](https://github.com/stefanprodan/podinfo) by Stefan Prodan (Apache-2.0)
   - [AKS Baseline](https://github.com/Azure/aks-baseline-automation) by Microsoft (MIT)
 
@@ -374,46 +374,68 @@ Flux in AKS zieht Update
 
 ---
 
-#### **Fallback: podinfo manuell erstellen (wenn Flux-Repo kein podinfo hat)** ⏱️ ~10 min
+#### **Fallback: podinfo manuell erstellen (Standard K8s Manifeste)** ⏱️ ~10 min
 
-- [ ] **4.9 podinfo HelmRelease erstellen**
+- [ ] **4.9 podinfo Deployment erstellen**
   ```bash
-  cat > apps/podinfo/base/helmrelease.yaml << 'EOF'
-  apiVersion: helm.toolkit.fluxcd.io/v2beta1
-  kind: HelmRelease
+  cat > apps/podinfo/base/deployment.yaml << 'EOF'
+  apiVersion: apps/v1
+  kind: Deployment
   metadata:
     name: podinfo
-    namespace: flux-system
+    namespace: tenant-demo
   spec:
-    interval: 5m
-    chart:
+    replicas: 2
+    selector:
+      matchLabels:
+        app: podinfo
+    template:
+      metadata:
+        labels:
+          app: podinfo
       spec:
-        chart: podinfo
-        version: '>=6.5.0'
-        sourceRef:
-          kind: HelmRepository
-          name: podinfo
-          namespace: flux-system
-    values:
-      replicaCount: 2
-      ingress:
-        enabled: true
-        className: nginx
-        hosts:
-          - host: demo.localhost
-            paths:
-              - path: /
-                pathType: Prefix
+        containers:
+        - name: podinfo
+          image: ghcr.io/stefanprodan/podinfo:6.9.2
+          ports:
+          - containerPort: 9898
+            name: http
+  ---
+  apiVersion: v1
+  kind: Service
+  metadata:
+    name: podinfo
+    namespace: tenant-demo
+  spec:
+    selector:
+      app: podinfo
+    ports:
+    - port: 9898
+      targetPort: 9898
   EOF
   ```
 
-- [ ] **4.10 Kustomization erstellen**
+- [ ] **4.10 Ingress erstellen**
   ```bash
-  cat > apps/podinfo/base/kustomization.yaml << 'EOF'
-  apiVersion: kustomize.config.k8s.io/v1beta1
-  kind: Kustomization
-  resources:
-    - helmrelease.yaml
+  cat > apps/podinfo/tenants/demo/ingress.yaml << 'EOF'
+  apiVersion: networking.k8s.io/v1
+  kind: Ingress
+  metadata:
+    name: podinfo
+    namespace: tenant-demo
+  spec:
+    ingressClassName: nginx
+    rules:
+    - host: demo.localhost
+      http:
+        paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: podinfo
+              port:
+                number: 9898
   EOF
   ```
 
@@ -713,57 +735,86 @@ TOTAL:                    46/46 Tests ✅ 1m 10s
 
 ---
 
-### **Block 11: Flux Bootstrap (GitOps)** ⏱️ ~30 min → ⏸️ **GEPLANT**
+### **Block 11: Argo CD Installation (GitOps)** ⏱️ ~30 min → ⏸️ **GEPLANT**
 
-- [ ] **11.1 Flux lokal testen**
+- [ ] **11.1 Argo CD lokal installieren**
   ```bash
-  flux bootstrap github \
-    --owner=ADASK-B \
-    --repository=agent-ready-k8s \
-    --branch=main \
-    --path=clusters/local \
-    --personal
+  # Argo CD in kind-Cluster deployen
+  kubectl create namespace argocd
+  kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+  
+  # Warten bis Argo CD bereit ist
+  kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=argocd-server -n argocd --timeout=300s
+  
+  # Admin Password abrufen
+  argocd admin initial-password -n argocd
+  
+  # Port-Forward für UI
+  kubectl port-forward svc/argocd-server -n argocd 8080:443
   ```
   
   **Was passiert:**
-  - Erstellt `clusters/local/flux-system/` Manifeste
-  - Deployed Flux-Controller in kind-Cluster
+  - Deployed Argo CD in kind-Cluster (namespace: argocd)
+  - UI verfügbar unter https://localhost:8080
   - Git wird zur Single Source of Truth
   
   **Voraussetzungen:**
-  - GitHub Personal Access Token (repo scope)
-  - Flux CLI installiert (✅ v2.7.0)
+  - Argo CD CLI installiert (✅ v2.13+)
   - kind-Cluster läuft (✅ agent-k8s-local)
+  - kubectl funktioniert
 
-- [ ] **11.2 Flux-Manifeste erstellen**
-  - `clusters/local/infrastructure.yaml` (GitRepository für Infra)
-  - `clusters/local/tenants/demo.yaml` (Kustomization für podinfo)
-  - `apps/podinfo/base/kustomization.yaml` (Kustomize-Basis) ✅ vorhanden
+- [ ] **11.2 Argo CD Applications erstellen**
+  - `clusters/local/infrastructure.yaml` (Argo CD App für Infra)
+  - `clusters/local/tenants/demo.yaml` (Argo CD App für podinfo)
+  - `apps/podinfo/base/` (Standard K8s Manifeste) ✅ vorhanden
   
   **Struktur:**
   ```
   clusters/local/
-  ├── flux-system/          # Flux Bootstrap (auto-generiert)
-  │   ├── gotk-components.yaml
-  │   ├── gotk-sync.yaml
-  │   └── kustomization.yaml
-  ├── infrastructure.yaml   # Infrastructure GitRepository
-  └── tenants/
-      └── demo.yaml         # podinfo Kustomization
+  ├── argocd-apps/          # Argo CD Application Manifeste
+  │   ├── infrastructure.yaml
+  │   └── tenants/
+  │       └── demo.yaml
+  ```
+  
+  **Beispiel Application:**
+  ```yaml
+  apiVersion: argoproj.io/v1alpha1
+  kind: Application
+  metadata:
+    name: podinfo-demo
+    namespace: argocd
+  spec:
+    project: default
+    source:
+      repoURL: https://github.com/ADASK-B/agent-ready-k8s
+      targetRevision: main
+      path: apps/podinfo/tenants/demo
+    destination:
+      server: https://kubernetes.default.svc
+      namespace: tenant-demo
+    syncPolicy:
+      automated:
+        prune: true
+        selfHeal: true
   ```
 
 - [ ] **11.3 GitOps-Test**
   ```bash
   # Änderung in Git pushen
-  vim apps/podinfo/tenants/demo/patch.yaml
-  # replicaCount: 2 → 3
+  vim apps/podinfo/tenants/demo/deployment.yaml
+  # replicas: 2 → 3
   git commit -m "test: scale podinfo to 3 replicas"
   git push
   
-  # Flux reconciled automatisch (max. 5 min)
-  flux get kustomizations --watch
+  # Argo CD synced automatisch (max. 3 min)
+  argocd app list
+  argocd app get podinfo-demo --watch
   kubectl get pods -n tenant-demo
   # Erwartung: 3/3 Pods nach 1-2 Minuten
+  
+  # Oder manuell triggern
+  argocd app sync podinfo-demo
   ```
   
   **GitOps-Vorteile:**
@@ -771,6 +822,7 @@ TOTAL:                    46/46 Tests ✅ 1m 10s
   - Automatische Deployments (kein kubectl/helm mehr nötig)
   - Audit-Trail (Git History)
   - Rollback via `git revert`
+  - UI Dashboard für visuelles Monitoring
 
 - [ ] **11.4 Sealed Secrets integrieren** (für Phase 2 AKS)
   ```bash
@@ -829,33 +881,38 @@ TOTAL:                    46/46 Tests ✅ 1m 10s
   - Erstell-Zeit: ~5-10 Minuten
   - Kubernetes Version: Latest stable (automatisch)
 
-- [ ] **12.3 Flux in AKS bootstrappen**
+- [ ] **12.3 Argo CD in AKS installieren**
   ```bash
   az aks get-credentials --resource-group agent-k8s-rg --name agent-k8s-prod
   
-  flux bootstrap github \
-    --owner=ADASK-B \
-    --repository=agent-ready-k8s \
-    --branch=main \
-    --path=clusters/production \
-    --personal
+  # Argo CD in AKS deployen
+  kubectl create namespace argocd
+  kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+  
+  # Mit GitHub Repository verbinden
+  argocd login <ARGOCD_SERVER>
+  argocd repo add https://github.com/ADASK-B/agent-ready-k8s
+  
+  # App of Apps Pattern für Production
+  kubectl apply -f clusters/production/argocd-apps/root-app.yaml
   ```
   
   **Was passiert:**
-  - Flux deployed in AKS (`flux-system` Namespace)
+  - Argo CD deployed in AKS (`argocd` Namespace)
   - Monitoring: `clusters/production/` Ordner
-  - Auto-Deploy bei Git-Push
+  - Auto-Sync bei Git-Push
   
   **Struktur:**
   ```
   clusters/
   ├── local/         # kind-Cluster (Phase 1) ✅
-  │   └── ...
+  │   └── argocd-apps/
   └── production/    # AKS-Cluster (Phase 2)
-      ├── flux-system/
-      ├── infrastructure.yaml
-      └── tenants/
-          └── demo.yaml
+      ├── argocd-apps/
+      │   ├── root-app.yaml
+      │   └── tenants/
+      │       └── demo.yaml
+      └── infrastructure/
   ```
 
 - [ ] **12.4 AKS Baseline Automation integrieren** (optional)
@@ -974,8 +1031,9 @@ TOTAL:                    46/46 Tests ✅ 1m 10s
   # - kubeconform: Manifest-Validierung ✅
   # - PR-Tests: Ephemerer kind-Cluster ✅
   
-  # Flux reconciled in AKS (5-10 min)
-  flux get kustomizations --watch
+  # Argo CD synced in AKS (3-5 min)
+  argocd app list
+  argocd app get podinfo-demo --watch
   
   # Neue Version deployed
   kubectl get pods -n tenant-demo -o jsonpath='{.items[0].spec.containers[0].image}'
@@ -988,30 +1046,35 @@ TOTAL:                    46/46 Tests ✅ 1m 10s
   git revert HEAD
   git push origin main
   
-  # → Flux rollt automatisch zurück (5-10 min)
+  # → Argo CD rollt automatisch zurück (3-5 min)
   # → Alte Version läuft wieder
+  
+  # Oder sofort via CLI
+  argocd app rollback podinfo-demo <REVISION>
   ```
   
   **GitOps-Vorteil:**
-  - Rollback = 1 Git-Command
+  - Rollback = 1 Git-Command (oder CLI)
   - Kein kubectl/helm nötig
   - Audit-Trail in Git-History
   - Automatisch synchronisiert
+  - Instant Rollback via Argo CD UI/CLI
 
 - [ ] **13.5 Multi-Environment Test** (Staging → Production)
   ```bash
   # Änderung in Staging testen
-  vim clusters/staging/tenants/demo.yaml
+  vim apps/podinfo/tenants/staging/deployment.yaml
   git push
   
   # Warten + beobachten (Staging)
-  flux get kustomizations -n flux-system
+  argocd app get podinfo-staging --watch
   
   # Wenn OK: Production deployen
-  vim clusters/production/tenants/demo.yaml
+  vim apps/podinfo/tenants/production/deployment.yaml
   git push
   
-  # Production Update (mit Approval-Gate in GitHub Actions)
+  # Production Update (mit Sync Waves / Approval in Argo CD)
+  argocd app sync podinfo-production
   ```
 
 ---
@@ -1020,9 +1083,9 @@ TOTAL:                    46/46 Tests ✅ 1m 10s
 
 **🎯 Phase 2 ist fertig wenn:**
 - ✅ GitHub Actions CI/CD läuft (Security-Scans, Tests)
-- ✅ Flux deployed automatisch zu AKS
-- ✅ `git push` → App-Update in Azure (5-10 min)
-- ✅ Rollback via `git revert` funktioniert
+- ✅ Argo CD deployed automatisch zu AKS
+- ✅ `git push` → App-Update in Azure (3-5 min)
+- ✅ Rollback via `git revert` oder Argo CD CLI funktioniert
 - ✅ TLS-Zertifikate automatisch (Let's Encrypt)
 - ✅ Monitoring + Alerting aktiv (Azure Monitor)
 
@@ -1031,12 +1094,12 @@ TOTAL:                    46/46 Tests ✅ 1m 10s
 | Check | Command | Erwartetes Ergebnis | Status |
 |-------|---------|---------------------|--------|
 | **GitHub Actions läuft** | GitHub → Actions Tab | CI-Pipeline grün | ⏸️ TODO |
-| **Flux in AKS** | `flux get kustomizations` | Alle reconciled | ⏸️ TODO |
+| **Argo CD in AKS** | `argocd app list` | Alle synced | ⏸️ TODO |
 | **AKS-Cluster läuft** | `az aks show -g agent-k8s-rg -n agent-k8s-prod` | provisioningState: Succeeded | ⏸️ TODO |
 | **podinfo in AKS** | `kubectl get pods -n tenant-demo` | 2/2 Running | ⏸️ TODO |
 | **Public URL** | `curl https://demo.yourdomain.com` | HTTP 200 + JSON | ⏸️ TODO |
 | **TLS funktioniert** | `curl -vI https://demo.yourdomain.com` | Valid cert (Let's Encrypt) | ⏸️ TODO |
-| **GitOps-Update** | Git push → `flux get kustomizations` | Auto-reconciled | ⏸️ TODO |
+| **GitOps-Update** | Git push → `argocd app get podinfo-demo` | Auto-synced | ⏸️ TODO |
 | **Rollback** | `git revert` + push | Alte Version läuft | ⏸️ TODO |
 
 ---
@@ -1154,7 +1217,7 @@ TOTAL:              1m 10s  ✅
 
 | Komponente | Quelle | Lizenz | Phase |
 |------------|--------|--------|-------|
-| **Flux Example** | https://github.com/fluxcd/flux2-kustomize-helm-example | Apache 2.0 | 1 + 2 |
+| **Argo CD** | https://github.com/argoproj/argo-cd | Apache 2.0 | 1 + 2 |
 | **AKS Baseline** | https://github.com/Azure/aks-baseline-automation | MIT | 2 |
 | **podinfo (Demo)** | https://github.com/stefanprodan/podinfo | Apache 2.0 | 1 |
 | **helm/kind-action** | https://github.com/helm/kind-action | Apache 2.0 | 2 |
@@ -1191,12 +1254,13 @@ TOTAL:              1m 10s  ✅
 
 **Geplante Features:**
 - GitHub Actions CI/CD (Security-Scans, Tests)
-- Flux GitOps (Auto-Deploy bei Git-Push)
+- Argo CD GitOps (Auto-Sync bei Git-Push)
 - AKS-Cluster (3 Nodes, Free Tier Control Plane)
 - Let's Encrypt TLS (automatisch)
 - Azure Monitor + Alerting
 - Sealed Secrets (sichere Secret-Verwaltung)
 - Multi-Environment (Staging → Production)
+- Argo CD UI Dashboard (visuelles Monitoring)
 
 ---
 

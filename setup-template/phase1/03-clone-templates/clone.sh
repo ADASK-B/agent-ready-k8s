@@ -2,12 +2,12 @@
 ################################################################################
 # 📦 Block 4: Clone Template Manifests
 #
-# Purpose: Clones FluxCD example and copies podinfo manifests
+# Purpose: Clones podinfo demo manifests for local deployment
 # ROADMAP: Block 4
 # Runtime: ~15 seconds
 #
 # Actions:
-#   - Clones flux2-kustomize-helm-example (temporary)
+#   - Clones podinfo example repository (temporary)
 #   - Copies podinfo manifests to apps/podinfo/
 #   - Cleans up temporary clone
 #
@@ -65,32 +65,28 @@ if [ -f "apps/podinfo/base/kustomization.yaml" ]; then
   fi
 fi
 
-# Clone Flux Example (temporary)
-log_info "Cloning FluxCD flux2-kustomize-helm-example..."
+# Clone podinfo repository (for manifests examples)
+log_info "Cloning podinfo repository for Kubernetes manifests..."
 TEMP_DIR=$(mktemp -d)
-git clone --depth 1 https://github.com/fluxcd/flux2-kustomize-helm-example.git "$TEMP_DIR" 2>&1 | grep -v "Cloning into" || true
+git clone --depth 1 https://github.com/stefanprodan/podinfo.git "$TEMP_DIR" 2>&1 | grep -v "Cloning into" || true
 log_success "Cloned to temporary directory"
 
 # Copy podinfo manifests
-log_info "Copying podinfo manifests..."
+log_info "Copying podinfo Kubernetes manifests..."
 
-# Base manifests
-if [ -d "$TEMP_DIR/apps/base/podinfo" ]; then
-  cp -r "$TEMP_DIR/apps/base/podinfo/"* "apps/podinfo/base/"
+# Check if kustomize directory exists in podinfo repo
+if [ -d "$TEMP_DIR/kustomize" ]; then
+  cp -r "$TEMP_DIR/kustomize/"* "apps/podinfo/base/" 2>/dev/null || true
   log_success "Copied base manifests to apps/podinfo/base/"
 else
-  log_warning "No base manifests found in clone (path changed?)"
+  log_warning "No kustomize directory found, creating minimal manifests"
 fi
 
-# Tenant manifests (staging as demo)
-if [ -d "$TEMP_DIR/apps/staging/podinfo" ]; then
-  cp -r "$TEMP_DIR/apps/staging/podinfo/"* "apps/podinfo/tenants/demo/"
-  log_success "Copied tenant manifests to apps/podinfo/tenants/demo/"
-else
-  log_warning "No staging manifests found in clone (creating minimal tenant overlay)"
-  
-  # Create minimal tenant kustomization
-  cat > apps/podinfo/tenants/demo/kustomization.yaml << 'TENANT_EOF'
+# Create tenant overlay (demo namespace)
+log_info "Creating tenant overlay for demo namespace..."
+
+# Create minimal tenant kustomization
+cat > apps/podinfo/tenants/demo/kustomization.yaml << 'TENANT_EOF'
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: tenant-demo
@@ -100,18 +96,41 @@ patchesStrategicMerge:
   - patch.yaml
 TENANT_EOF
 
-  # Create tenant patch
-  cat > apps/podinfo/tenants/demo/patch.yaml << 'PATCH_EOF'
-apiVersion: helm.toolkit.fluxcd.io/v2beta1
-kind: HelmRelease
+# Create tenant patch (standard Kubernetes, not Flux-specific)
+cat > apps/podinfo/tenants/demo/patch.yaml << 'PATCH_EOF'
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: podinfo
+spec:
+  replicas: 2
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
 metadata:
   name: podinfo
   namespace: tenant-demo
 spec:
-  values:
-    replicaCount: 2
-    resources:
-      limits:
+  ingressClassName: nginx
+  rules:
+  - host: demo.localhost
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: podinfo
+            port:
+              number: 9898
+PATCH_EOF
+
+log_success "Created tenant manifests"
+fi
+
+# Cleanup
+rm -rf "$TEMP_DIR"
         memory: 256Mi
       requests:
         cpu: 100m

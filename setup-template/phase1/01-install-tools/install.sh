@@ -11,7 +11,7 @@
 #   - kind (Kubernetes in Docker)
 #   - kubectl
 #   - Helm
-#   - Flux CLI
+#   - Argo CD CLI
 #   - k9s (Terminal UI for Kubernetes)
 #   - Task (optional)
 #
@@ -95,13 +95,16 @@ else
   log_success "Helm already installed: $(helm version --short)"
 fi
 
-# Install Flux CLI
-log_info "Installing Flux CLI..."
-if ! command -v flux &> /dev/null; then
-  curl -s https://fluxcd.io/install.sh | sudo bash
-  log_success "Flux installed: $(flux version --client)"
+# Install Argo CD CLI
+log_info "Installing Argo CD CLI..."
+if ! command -v argocd &> /dev/null; then
+  ARGOCD_VERSION=$(curl -s https://api.github.com/repos/argoproj/argo-cd/releases/latest | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+  curl -sSL -o /tmp/argocd-linux-amd64 "https://github.com/argoproj/argo-cd/releases/download/${ARGOCD_VERSION}/argocd-linux-amd64"
+  sudo install -m 555 /tmp/argocd-linux-amd64 /usr/local/bin/argocd
+  rm /tmp/argocd-linux-amd64
+  log_success "Argo CD installed: $(argocd version --client --short 2>&1 | head -1)"
 else
-  log_success "Flux already installed: $(flux version --client)"
+  log_success "Argo CD already installed: $(argocd version --client --short 2>&1 | head -1)"
 fi
 
 # Install k9s (Terminal UI for Kubernetes)
