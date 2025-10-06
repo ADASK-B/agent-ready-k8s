@@ -6,6 +6,32 @@
 
 ---
 
+## 🚨 MANDATORY READING FOR AI AGENTS
+
+**Before making ANY architectural or technical decision, you MUST read:**
+
+📖 **[`/docs/architecture/ARCHITECTURE.md`](/docs/architecture/ARCHITECTURE.md)**
+
+This file contains:
+- **Golden Rules** for cloud-agnostic design
+- **Do's & Don'ts** by domain (Terraform, GitOps, Networking, Security, etc.)
+- **Provider mapping** (AKS vs. On-Prem vs. EKS vs. GKE)
+- **Decision criteria** for tool selection
+
+**Why mandatory?**
+- Ensures consistency across Phase 1 (local) → Phase 2 (AKS/On-Prem)
+- Prevents vendor lock-in patterns
+- Enforces security & portability by design
+
+**When to read it:**
+- ✅ Before suggesting infrastructure changes
+- ✅ Before adding new dependencies/tools
+- ✅ Before modifying GitOps structure
+- ✅ Before making security-related decisions
+- ✅ When choosing between implementation alternatives
+
+---
+
 ## 🌍 PRIO 0: LANGUAGE RULE
 
 **🚨 ALL CODE, DOCS, AND COMMITS MUST BE IN ENGLISH! 🚨**
@@ -71,6 +97,7 @@ Traditional K8s setups require manual decisions. This template provides:
 
 | File | Location | Purpose | Status |
 |------|----------|---------|--------|
+| **⚠️ Architecture** | `/docs/architecture/ARCHITECTURE.md` | **MANDATORY:** Design principles, golden rules, decision criteria | 📝 To be filled |
 | **README** | `/README.md` | Project overview, quick start | 📝 Core |
 | **Roadmap** | `/ROADMAP.md` | Phase checklists, progress tracking | ✅ Active |
 | **Quickstart** | `/docs/quickstart/Quickstart.md` | Setup guide, troubleshooting | 🔄 In Progress |
