@@ -34,21 +34,34 @@
 ## 📖 Project Overview
 
 **Name:** agent-ready-k8s  
-**Type:** Kubernetes Local Development Template  
+**Type:** AI-Driven Kubernetes Template Stack  
 **Current Status:** 🏗️ **IN DEVELOPMENT**  
 **Architecture:** 2-Phase (Local → Cloud)
 
-**Goal:**
-Fast, automated Kubernetes setup for development with optional production deployment.
+**🎯 Project Goal:**
+Build a **scalable, AI-agent-friendly Kubernetes template** that can be:
+- 🤖 **Controlled by AI agents** (automated decision-making)
+- 📦 **Modular & composable** (blocks can be combined/extended)
+- 🚀 **Fast to deploy** (local in ~1 min, production-ready structure)
+- 🔄 **GitOps-native** (git as single source of truth)
+- 📚 **Self-documenting** (AI can navigate via metadata)
+
+**Why "agent-ready"?**
+Traditional K8s setups require manual decisions. This template provides:
+- Clear metadata for AI navigation (this file)
+- Atomic, testable blocks (phase1/XX-name/)
+- Declarative structure (AI knows what to change)
+- Automated workflows (AI can trigger deployments)
 
 **Phases:**
 1. **Local Dev** - kind cluster + demo app (~1 min setup)
 2. **Cloud Deploy** - Argo CD GitOps + Azure AKS (planned)
 
 **Target Users:**
-- Developers needing quick local K8s
-- Teams seeking production-ready templates
-- K8s + GitOps learners
+- 🤖 AI agents automating infrastructure
+- 👨‍💻 Developers needing quick local K8s
+- 🏢 Teams seeking production-ready templates
+- 🎓 K8s + GitOps learners
 
 ---
 
@@ -56,92 +69,91 @@ Fast, automated Kubernetes setup for development with optional production deploy
 
 ### **Core Documentation**
 
-| File | Location | Content | When to Read |
-|------|----------|---------|--------------|
-| **README** | `/README.md` | Project overview, features, quick start | First time, project introduction |
-| **Roadmap** | `/ROADMAP.md` | Phase 1+2 checklists, implementation status | Planning, progress tracking |
-| **Quickstart** | `/docs/quickstart/Quickstart.md` | Setup guide, troubleshooting | Installation, first setup |
-| **System Overview** | `/docs/SYSTEM_OVERVIEW.md` | Architecture diagrams, components | Understanding system design |
-| **This File** | `/.github/copilot-instructions.md` | Metadata registry, navigation | AI orientation, finding files |
+| File | Location | Purpose | Status |
+|------|----------|---------|--------|
+| **README** | `/README.md` | Project overview, quick start | 📝 Core |
+| **Roadmap** | `/ROADMAP.md` | Phase checklists, progress tracking | ✅ Active |
+| **Quickstart** | `/docs/quickstart/Quickstart.md` | Setup guide, troubleshooting | 🔄 In Progress |
+| **System Overview** | `/docs/SYSTEM_OVERVIEW.md` | Architecture diagrams, design decisions | 📋 Planned |
+| **This File** | `/.github/copilot-instructions.md` | Metadata registry, AI navigation | ✅ Active |
 
-### **Code Structure**
+### **Code & Scripts**
 
-| Path | Purpose | Contains |
-|------|---------|----------|
-| `/setup-template/` | Setup scripts | Phase 1+2 automation |
-| `/setup-template/setup-phase1.sh` | Master script | Complete Phase 1 automation |
-| `/setup-template/phase1/` | Phase 1 blocks | 6 setup blocks (tools, cluster, ingress, demo) |
-| `/setup-template/phase1/*/test.sh` | Block tests | Validation scripts per block |
-| `/docs/` | Documentation | Guides, architecture, troubleshooting |
+| Path | Purpose | Phase |
+|------|---------|-------|
+| `/setup-template/` | Automation scripts | All |
+| `/setup-template/setup-phase1.sh` | Phase 1 orchestrator | 1 |
+| `/setup-template/phase1/` | Phase 1 setup blocks (6 blocks) | 1 |
+| `/setup-template/phase2/` | Phase 2 setup blocks | 2 (planned) |
+| `/docs/` | Documentation files | All |
+| `.gitignore` | Git exclusions | All |
+| `LICENSE` | MIT License | All |
 
-### **Generated During Setup**
+### **Project Structure Notes**
 
-| Path | Created By | Purpose |
-|------|-----------|---------|
-| `apps/` | setup scripts | Application manifests |
-| `clusters/` | setup scripts | Cluster configurations |
-| `infrastructure/` | setup scripts | Shared infrastructure (ingress, etc.) |
-| `policies/` | setup scripts | OPA/Gatekeeper policies |
-| `kind-config.yaml` | setup scripts | kind cluster configuration |
+- **Development Phase:** Structure evolves between Phase 1 and Phase 2
+- **Generated Files:** Created during setup (see `.gitignore` for excluded paths)
+- **Phase 1 Focus:** Local development (kind, Helm, manifests)
+- **Phase 2 Changes:** Will add GitOps structure (Argo CD, AKS configs)
+
+**⚠️ Note:** Specific folder structure depends on current phase. Check `ROADMAP.md` for phase status.
 
 ---
 
-## 🛠️ Tech Stack (Current)
+## 🛠️ Tech Stack
 
 ### **Phase 1 - Local Development**
-| Component | Version | Purpose |
-|-----------|---------|---------|
-| **Docker** | 28.5.0+ | Container runtime |
-| **kind** | 0.20.0+ | Local Kubernetes clusters |
-| **kubectl** | 1.28+ | Kubernetes CLI |
-| **Helm** | 3.19.0+ | Package manager |
-| **Argo CD CLI** | 2.13+ | GitOps tool (planned) |
-| **Task** | 3.45.4+ | Task runner |
-| **ingress-nginx** | latest | Ingress controller |
-| **podinfo** | latest | Demo application |
+| Component | Purpose | Status |
+|-----------|---------|--------|
+| **Docker** | Container runtime | Required |
+| **kind** | Local Kubernetes clusters | Required |
+| **kubectl** | Kubernetes CLI | Required |
+| **Helm** | Package manager | Required |
+| **Argo CD CLI** | GitOps tool (for Phase 2) | Optional |
+| **Task** | Task runner | Optional |
 
 ### **Phase 2 - Cloud (Planned)**
 | Component | Purpose | Status |
 |-----------|---------|--------|
-| **Argo CD** | GitOps automation | 📋 Planned |
+| **Argo CD** | GitOps continuous delivery | 📋 Planned |
 | **Azure AKS** | Managed Kubernetes | 📋 Planned |
-| **cert-manager** | TLS certificates | 📋 Planned |
-| **Sealed Secrets** | Encrypted secrets | 📋 Planned |
+| **cert-manager** | TLS certificate automation | 📋 Planned |
+| **Sealed Secrets** | Encrypted secret management | 📋 Planned |
+| **GitHub Actions** | CI/CD pipeline | 📋 Planned |
+
+**Version Info:** See individual setup scripts in `/setup-template/phase1/` for specific version requirements.
 
 ---
 
 ## 🚀 Command Reference
 
-### **Setup**
+### **Phase 1 - Quick Start**
 ```bash
 # Complete automated setup
 ./setup-template/setup-phase1.sh
 
 # Test individual blocks
-./setup-template/phase1/01-install-tools/test.sh
+./setup-template/phase1/*/test.sh
 ```
 
-### **Cluster Management**
+### **Common Operations**
 ```bash
-# Check cluster status
+# Check status
 kubectl get pods -A
+kind get clusters
 
-# Delete cluster
+# Cleanup
 kind delete cluster --name agent-k8s-local
 ```
 
-### **Cleanup**
-```bash
-# Remove all generated files
-rm -rf apps/ clusters/ infrastructure/ policies/ kind-config.yaml
-```
+**More Commands:** See `ROADMAP.md` for phase-specific commands and workflows.
 
 ---
 
-## 📊 Project Status
+## 📊 Current Status
 
-**Phase 1:** 🏗️ In Development  
-**Phase 2:** 📋 Planned  
+**Development Phase:** Check `ROADMAP.md` for current progress  
+**Active Work:** See latest commits and open issues  
 **Last Updated:** 06.01.2025
 
 ---
