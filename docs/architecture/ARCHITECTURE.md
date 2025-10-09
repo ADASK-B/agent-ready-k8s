@@ -1,81 +1,136 @@
-# Goal (precise)
+# Enterprise‑Grade Kubernetes Platform – Architecture & Operating Model (EN)
 
-Build an **enterprise-grade, production-ready Kubernetes platform template** that can be deployed to **any environment** (managed cloud or on-prem) from **a single Git repository** via **GitOps**, with **zero application code changes** between environments.
-
-**What we're building:**
-* **GitOps-driven platform** (Argo CD) managing cluster infrastructure (networking, storage, secrets, observability, policies)
-* **Environment-agnostic application manifests** in `clusters/base/` that run identically everywhere
-* **Provider-specific overlays** in `clusters/overlays/{aks,eks,gke,onprem}/` that adapt only infrastructure components
-* **Security-first architecture** with Pod Security, NetworkPolicies, RBAC, signed images, and audit logging built-in
-* **Multi-tenancy support** via namespace isolation, resource quotas, and per-team RBAC
-* **Automated disaster recovery** with Velero backups and proven restore procedures
-
-**Target deployments:**
-1. **Local testing:** kind cluster (ephemeral, Docker-based, for CI/CD validation)
-2. **Cloud production:** AKS/EKS/GKE (managed Kubernetes with cloud-native integrations)
-3. **On-prem production:** Self-managed Kubernetes via kubeadm (customer VM, bare metal, private cloud) or RKE2 (hardened for compliance)
-
-**Success criteria:**
-* Fresh cluster deployed from Git in under 30 minutes
-* Application workloads accessible via **DNS+TLS** (Let's Encrypt)
-* **Policy gates enforced** (Kyverno/OPA blocking non-compliant deployments)
-* **Velero backup+restore tested** and passing
-* **Full audit trail** of all changes via Git history + K8s audit logs
-* **Zero manual clicks** in cloud portals or kubectl commands to production
-
-**Non-goals:**
-* Application-specific configurations (belongs in app repos, not platform repo)
-* Multi-cluster management (focus is single-cluster reproducibility first)
-* Day-2 operation automation beyond GitOps sync (monitoring/alerting setup only)
+**Version:** 1.0
+**Last Updated:** 09 Oct 2025 (Europe/Berlin)
+**Status:** Living document — maintained via PRs; Git history is the audit trail.
 
 ---
 
-# Golden Rules (critical for portability & operations)
+## 0) Executive Summary (Decision‑Grade)
 
-1. **Strict layering:**
-   *Infra (Terraform) ⟂ Cluster add-ons (GitOps) ⟂ Apps (GitOps)*. No mixing.
+**Assessment:** This architecture is target‑aligned and sufficient to achieve the stated goal: a single Git repository that reproducibly deploys an enterprise‑ready Kubernetes platform to **any environment** (managed cloud or on‑prem) via **GitOps**, with **zero application‑code changes** between environments.
+**Core principle:** *One codebase, multiple overlays – identical app manifests everywhere.*
+**Delivery model:** Terraform (infra & GitOps bootstrap) → Argo CD (cluster add‑ons & apps) → Zero click‑ops.
 
-2. **One repo—multiple overlays:**
-   `clusters/base` (shared baseline) + `overlays/{aks,eks,gke,onprem}` for provider details only.
+**Tightenings vs. the original draft:**
 
-3. **Naming consistency everywhere:**
-   Keep identical names: `ingressClassName`, `StorageClass` (e.g., `standard`), `ClusterIssuer` (e.g., `letsencrypt-prod`), Secret/ServiceAccount names.
+* Explicit, testable **acceptance criteria** mapped to automated checks.
+* A complete **repository skeleton** (Kustomize + Argo CD app‑of‑apps).
+* **Fail‑closed security** (PSA “restricted”, signature‑required, default‑deny, least‑privilege RBAC).
+* **Portability guardrails** (stable names, consistent classes, strict overlay boundaries).
+* **DR proof** (mandatory Velero restore drill & runbook).
+* **Upgrade governance** (version pinning, staged rollout, maintenance windows, runbooks).
 
-4. **GitOps is the single source of truth:**
-   No click-ops. Changes flow PR → review → merge → sync.
-
-5. **Immutable & signed:**
-   Pin images by **digest**, **sign with Cosign**, never use `:latest`.
-
-6. **Security by default:**
-   Pod Security (restricted), default-deny NetworkPolicies, least-privilege RBAC, never store secrets in the repo.
-
-7. **Unified observability:**
-   Prometheus/Grafana, Loki, **OpenTelemetry Collector**—identical across environments; shared dashboards & alerts.
-
-8. **Backups/DR must be proven:**
-   Velero + object-storage backend (cloud/on-prem). Routine restore tests are mandatory.
-
-9. **Planned, reproducible upgrades:**
-   Pin versions (K8s, CNIs, charts, CRDs); stage first; maintenance windows; runbooks.
-
-10. **No provider lock-in inside app manifests:**
-    Avoid cloud-specific ingress/storage annotations in charts.
+> **Outcome:** A platform that can be rolled out on **any on‑prem Linux** host and on **AKS/EKS/GKE** from a **single Git repo**, **without changing application manifests**.
 
 ---
 
-# Must-have tools (Minimum Viable Platform)
+## 1) Purpose & Scope
+
+Design and operate a **production‑ready, security‑first, GitOps‑driven** Kubernetes platform that runs **identically** across local, cloud, and on‑prem environments.
+
+**Non‑goals:** Multi‑cluster fleet; application‑specific configuration; Day‑2 automation beyond GitOps sync (we provide only observability & alerting baseline).
+
+---
+
+## 2) Measurable Success Criteria (with Tests)
+
+| Objective                       | Acceptance Test (automatable)                                                         |
+| ------------------------------- | ------------------------------------------------------------------------------------- |
+| Fresh cluster < 30 min from Git | CI spins up kind/AKS/EKS/GKE; stopwatch from bootstrap to all add‑ons Ready < 30 min. |
+| DNS + TLS green                 | `curl https://app.example.com` returns 200; certificate valid; ACME events clean.     |
+| Policy gates enforced           | Negative test: unsigned image or `runAsRoot` → admission **blocked**.                 |
+| Backup & restore proven         | `velero restore` of a test namespace → checksums and readiness probes OK.             |
+| Full audit trail                | Git history + Kubernetes audit logs enabled; query links change to deploy event.      |
+| Zero click‑ops to production    | All changes via PR→merge→sync; no portal or kubectl to prod (policy enforced).        |
+
+---
+
+## 3) Reference Architecture (Strict Layering)
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│                     Applications (tenant namespaces)           │
+│  ————————————————  ————————————————  ————————————————           │
+│  App A (base)      App B (base)      App C (base)              │
+└────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────┐
+│              Cluster Add‑ons (GitOps, immutable, pinned)       │
+│  Ingress, cert‑manager, ExternalDNS, ESO, Policies,            │
+│  Observability (kube‑prom‑stack, Loki, OTel/Tempo), Velero     │
+└────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────┐
+│ Infra (Terraform)                                              │
+│  Cloud: VNet/VPC, LB IPs, DNS zones, KMS, Managed Cluster      │
+│  On‑Prem: VMs + cloud‑init, networks, LB IPs, MinIO, Vault     │
+└────────────────────────────────────────────────────────────────┘
+```
+
+**Separation of concerns:** *Infra (Terraform) ⟂ Cluster add‑ons (Argo CD) ⟂ Apps*. No cross‑layer mixing.
+
+---
+
+## 4) Repository Layout (Single Repo, Provider Overlays)
+
+```
+repo/
+├─ infra/                       # Terraform: cloud (aks/eks/gke) and onprem (vms, dns, s3/minio)
+│  ├─ modules/
+│  ├─ envs/
+│  │  ├─ aks/
+│  │  ├─ eks/
+│  │  ├─ gke/
+│  │  └─ onprem/
+│  └─ bootstrap/                # Argo CD install + root app (via TF null_resource/helm)
+├─ clusters/
+│  ├─ base/                     # provider‑agnostic add‑ons (Kustomize bases)
+│  │  ├─ ingress-nginx/
+│  │  ├─ cert-manager/
+│  │  ├─ external-dns/
+│  │  ├─ external-secrets/
+│  │  ├─ policies/              # Kyverno/Gatekeeper, PSA restricted, signature verify
+│  │  ├─ observability/         # kube-prom-stack, Loki, Tempo/OTel Collector
+│  │  ├─ storage/               # generic CSI abstractions; StorageClass name = "standard"
+│  │  └─ backup-dr/             # Velero (CRDs, schedules, restores)
+│  └─ overlays/
+│     ├─ aks/
+│     ├─ eks/
+│     ├─ gke/
+│     └─ onprem/
+└─ apps/                        # environment‑agnostic application bases (optionally separate repo)
+```
+
+**App‑of‑apps:** A single **root** Argo CD Application points to `clusters/overlays/<provider>/root/` which aggregates all add‑ons and tenants.
+
+---
+
+## 5) Golden Rules (Portability & Operations)
+
+1. **Strict layering:** Terraform (infra) ⟂ Argo CD (add‑ons & apps).
+2. **One repo — multiple overlays:** `clusters/base/` shared; `clusters/overlays/{aks,eks,gke,onprem}/` provider specifics only.
+3. **Naming consistency:** Same `ingressClassName`, `StorageClass` (e.g., `standard`), `ClusterIssuer` (e.g., `letsencrypt-prod`), Secrets & ServiceAccounts across environments.
+4. **GitOps is the source of truth:** No click‑ops. Changes via PR→review→merge→sync.
+5. **Immutable & signed:** Images pinned by digest, **Cosign**‑signed; never `:latest`.
+6. **Security by default:** PSA restricted, default‑deny NetworkPolicies, least‑privilege RBAC, no secrets in Git.
+7. **Unified observability:** Metrics/logs/traces identical everywhere; shared dashboards/alerts.
+8. **DR must be proven:** Velero + object storage; periodic restore drills.
+9. **Reproducible upgrades:** Version pins, staged rollout, runbooks.
+10. **No provider lock‑in in app manifests:** No cloud annotations/storage classes in app charts.
+
+---
+
+## 6) Minimum Viable Platform (Tools & Responsibilities)
 
 **Provisioning & governance**
 
-* **Terraform** (infra to GitOps bootstrap), remote state with locking.
-* **GitOps:** **Argo CD** (CLI-first, declarative, CNCF graduated—chosen for agent-friendly automation).
-* **Policy:** **Kyverno** *or* **OPA Gatekeeper** (policy checks before sync).
+* **Terraform** (infra + GitOps bootstrap); remote state w/ locking & encryption.
+* **GitOps:** **Argo CD** (CLI‑first, declarative, app‑of‑apps).
+* **Policy:** **Kyverno** *or* **OPA Gatekeeper** for admission & drift policy.
 
 **Networking & entry**
 
-* **Ingress:** **NGINX** *or* **Traefik** (one `IngressClass` everywhere).
-* **Load balancer:** Cloud LB (AKS/EKS/GKE) ↔ **MetalLB** (on-prem).
+* **Ingress:** NGINX **or** Traefik; one `IngressClass` everywhere.
+* **Load balancer:** Cloud LBs (AKS/EKS/GKE) ↔ **MetalLB** (on‑prem).
 * **DNS:** **ExternalDNS** (Azure DNS / Route 53 / Cloud DNS / internal DNS).
 
 **Certificates & secrets**
@@ -85,373 +140,338 @@ Build an **enterprise-grade, production-ready Kubernetes platform template** tha
 
 **Storage**
 
-* Cloud CSI (Azure Disk/Files, EBS/EFS, GCE-PD/Filestore) ↔ on-prem **Longhorn** (simple) *or* **Rook-Ceph** (scale).
-  Use the same `StorageClass` name.
+* Cloud CSI (Azure Disk/Files, EBS/EFS, GCE‑PD/Filestore) ↔ on‑prem **Longhorn** (simple) or **Rook‑Ceph** (scale).
+* Use the **same `StorageClass` name** everywhere.
 
 **Observability & SRE**
 
-* **kube-prometheus-stack**, **Loki**, **Tempo/OTel Collector** (metrics/logs/traces).
-* **Alertmanager** with defined **SLOs** and runbooks.
+* **kube‑prometheus‑stack**, **Loki**, **Tempo/OTel Collector** (metrics/logs/traces).
+* **Alertmanager** w/ SLOs & runbooks.
 
 **Backup/DR**
 
 * **Velero** (+ CSI Snapshot CRDs), offsite object storage (S3/GCS/Azure/MinIO).
 
-**Software supply chain**
+**Supply chain**
 
-* **Cosign** (signatures), **Trivy/Grype** (image scans), SBOM in CI.
+* **Cosign** (signatures), **Trivy/Grype** (image scans), SBOMs in CI.
 
 **Optional / recommended**
 
-* **Rancher** or **Lens** (cluster management/GUI).
-* **Gateway API** (future-proof ingress), **Cilium** (eBPF) on-prem.
+* **Rancher** or **Lens** (operator GUI).
+* **Gateway API** (forward‑compatible), **Cilium** (eBPF) on‑prem.
 
 ---
 
-# Container Registry Strategy
+## 7) Container Registry Strategy
 
-**Purpose:**
-A container registry stores and distributes Docker/OCI images for your Kubernetes workloads. Essential for: centralized versioning, access control, security scanning, and CI/CD automation. **Eliminates Docker Hub rate limits** (200 pulls/6h for anonymous users) and enables enterprise features like geo-replication and compliance auditing.
+**Purpose:** Centralized, rate‑limit‑free image distribution w/ RBAC, scanning and geo‑replication.
 
-**Registry by Environment:**
+| Environment         | Registry               | When to Use                                                         | Cost       | Authentication    |
+| ------------------- | ---------------------- | ------------------------------------------------------------------- | ---------- | ----------------- |
+| Local (kind)        | **GHCR**               | Always                                                              | 0 €        | GitHub PAT        |
+| Cloud (AKS/EKS/GKE) | **GHCR → ACR/ECR/GAR** | Start with GHCR; add native registry for geo‑replication/compliance | ~0–10 €/mo | Workload Identity |
+| On‑Prem             | **GHCR** or **Harbor** | GHCR if internet; Harbor for air‑gapped                             | 0 € (GHCR) | PAT / Basic Auth  |
 
-| Environment | Registry | When to Use | Cost | Authentication |
-|-------------|----------|-------------|------|----------------|
-| **Local (kind)** | GHCR | Always | 0 € | GitHub PAT |
-| **Cloud (AKS/EKS/GKE)** | GHCR → ACR/ECR/GAR | Start GHCR, add cloud-native for geo-replication/scanning | 0-10 €/month | Workload Identity |
-| **On-Prem (customer VM)** | GHCR or Harbor | GHCR if internet, Harbor for air-gapped | 0 € (GHCR) | PAT or Basic Auth |
-
-**Decision Rules:**
-* **Start with GHCR everywhere** (free, works across all clouds)
-* **Add ACR/ECR/GAR when:** Private images, geo-replication, built-in scanning, or compliance required
-* **Use Harbor when:** Air-gapped on-prem (no internet access)
-
-**Implementation:**
-* Images pinned by digest: `image: myapp:v1.0.0@sha256:abc123...`
-* Cosign signatures verified by admission controller
-* Base manifests use `${REGISTRY}` variable, overlays set specific registry
-* Pull secrets consistently named: `registry-credentials`
+**Rules:** Pin by **digest**; verify **Cosign** signatures via policy; `${REGISTRY}` variable in bases, set per overlay; pull secret named `registry-credentials` consistently.
 
 ---
 
-# Kubernetes Cluster Options
+## 8) Cluster Options & Decision Guide
 
-**Purpose:**
-Choose the right Kubernetes distribution based on deployment environment, control requirements, and operational constraints.
+| Environment      | Cluster Type | Distribution            | Setup Complexity   | Resources  | Control Plane    |
+| ---------------- | ------------ | ----------------------- | ------------------ | ---------- | ---------------- |
+| Local (dev/test) | Ephemeral    | **kind**                | Low (1 command)    | ~2+ GB RAM | Local Docker     |
+| Cloud (prod)     | Managed      | **AKS/EKS/GKE**         | Medium (Terraform) | Managed    | Provider‑managed |
+| On‑Prem (prod)   | Self‑managed | **kubeadm** or **RKE2** | High               | 4+ GB RAM  | Self‑managed     |
 
-**Cluster Types by Environment:**
-
-| Environment | Cluster Type | Distribution | Setup Complexity | Resources | Control Plane |
-|-------------|--------------|--------------|------------------|-----------|---------------|
-| **Local (dev/test)** | Ephemeral | kind | Low (1 command) | 2 GB RAM | Local Docker |
-| **Cloud (managed)** | Production | AKS/EKS/GKE | Medium (Terraform) | Managed | Cloud-managed |
-| **On-Prem (production)** | Production | Kubernetes (kubeadm) or RKE2 | High | 4+ GB RAM | Self-managed |
-
-**Decision Matrix:**
-
-**Use kind when:**
-* Local development and testing
-* Need 100% upstream Kubernetes (no customizations)
-* Multi-node testing required (HA simulation)
-* Fast cluster creation/deletion cycles
-
-**Use AKS/EKS/GKE when:**
-* Managed control plane required (no K8s ops team)
-* Cloud-native integrations needed (Load Balancer, DNS, Key Vault, etc.)
-* Auto-scaling and auto-upgrades desired
-* Budget allows managed services (~60-150 €/month)
-
-**Use Kubernetes (kubeadm) when:**
-* **Standard for all production deployments** (enterprise, SMB, startup)
-* Full control over every component (CNI, CSI, ingress, observability)
-* **On-prem installations** (customer VM, bare metal, private cloud)
-* Compliance/audit requirements (security teams prefer upstream K8s)
-* Team has Kubernetes experience (or learning via CKA/CKAD/CKS)
-* Need to match managed cloud behavior (AKS/EKS/GKE use upstream K8s)
-* Multi-tenancy with strict namespace isolation and resource quotas
-* **Scales from small (single node) to large (1000+ nodes)**
-
-**Use RKE2 when:**
-* Government or finance sector with **FIPS 140-2** requirements
-* Security compliance mandates (CIS benchmarks pre-hardened)
-* Hardened by default needed (SELinux, AppArmor, seccomp enforced)
-* Rancher-managed fleet (centralized multi-cluster management)
-
-**Key Point:** All distributions are **100% API-compatible** (CNCF certified). App manifests work identically everywhere.
-
-**What's identical across all distributions:**
-* `kubectl` commands and API
-* Helm charts and operators
-* CRDs and custom resources
-* Container runtime (containerd)
-* Networking primitives (Services, Pods)
-* Storage primitives (PVCs, StorageClasses)
-
-**What differs (handled by overlays):**
-* Control plane management: Managed (AKS/EKS/GKE) vs. self-managed (kubeadm/RKE2)
-* Load balancer: Cloud LB (AKS/EKS/GKE) vs. MetalLB (on-prem)
-* DNS integration: Cloud DNS (Azure/Route53/CloudDNS) vs. internal/Cloudflare
-* Default components: Managed services (cloud) vs. self-installed (on-prem kubeadm requires manual CNI/CSI/ingress setup)
+**Use kind** for local tests and CI parity.
+**Use managed cloud** when you want a managed control plane & cloud integrations.
+**Use kubeadm** for standard on‑prem; **RKE2** for hardened/FIPS contexts.
+All are **CNCF‑certified** → API‑compatible; app manifests run unchanged.
 
 ---
 
-# Do's & Don'ts by domain
+## 9) Do’s & Don’ts (By Domain)
 
-## 1) Terraform & IaC
+### Terraform & IaC
 
-**Do**
+**Do:** Separate remote state per environment; unify module interfaces; use Terraform for infra primitives & GitOps bootstrap; CI auth via OIDC.
+**Don’t:** Manage Deployments/CRDs long‑term with Terraform; store secrets in state; allow portal drift.
 
-* Separate **remote state per environment** (encrypted, locked).
-* **Unify module interfaces**: a `module.cluster` with provider-specific implementations (AKS/EKS/GKE/on-prem) underneath.
-* Terraform is for **networks, subnets, public IPs, DNS zones, LB primitives, registries, KMS/keystores**, **managed clusters** (AKS/EKS/GKE) or **VMs + cloud-init** (on-prem), and **GitOps bootstrap only**.
-* CI auth via **OIDC/federation**—no long-lived keys.
+### GitOps & manifests
 
-**Don’t**
+**Do:** `base/` holds add‑ons; overlays alter only provider specifics; PR mandatory; pin images; fail‑closed admission.
+**Don’t:** `kubectl apply` to prod; diverging names across environments.
 
-* Don’t manage **Kubernetes objects** (Deployments/Ingress/CRDs) long-term with Terraform.
-* **No secrets** in Terraform state.
-* No portal changes in parallel (drift).
+### Networking & ingress
 
-## 2) GitOps & manifests
+**Do:** One `IngressClass`; `Service` type LB (MetalLB on‑prem); default‑deny NetworkPolicies; ExternalDNS everywhere.
+**Don’t:** Cloud‑specific ingress annotations in apps; internet‑facing NodePorts.
 
-**Do**
+### CNI & IP design
 
-* `base/` contains add-ons (Ingress, cert-manager, ExternalDNS, storage drivers, ESO, observability, policies).
-* `overlays/{aks,onprem,…}` change **only** provider specifics.
-* **PR required** + automated **policy checks** before reconciliation.
-* **Pin images by digest**, release notes, change freeze for critical events.
-* **Admission must fail-closed** (policy or signature check failing blocks deploy).
+**Do:** Document Pod/Service CIDRs; pick Cilium/Calico on‑prem; plan MTU/BGP (MetalLB).
+**Don’t:** Assume identical Pod IP behavior across clouds.
 
-**Don’t**
+### Storage & data
 
-* No `kubectl apply` to production from laptops.
-* No diverging object names across environments.
+**Do:** Same `StorageClass` name; enable CSI snapshots; encrypt at rest; etcd secret encryption on self‑managed.
+**Don’t:** Hard‑code cloud SC names; forklift PVs without migration.
 
-## 3) Networking & ingress
+### Secrets & keys
 
-**Do**
+**Do:** ESO + native secret store; rotate; least privilege; short‑lived SA tokens.
+**Don’t:** Static cloud keys as Kubernetes Secrets; secrets in Git/TF state.
 
-* One `IngressClass` (e.g., `nginx`).
-* Services use `type: LoadBalancer`; on-prem use **MetalLB** (L2/BGP, plan IP pools).
-* **NetworkPolicies** default-deny; allow egress narrowly; validate CNI behavior.
-* **ExternalDNS**: only provider credentials differ.
+### Identity & access
 
-**Don’t**
+**Do:** Workload identity (Azure AD WI / IRSA / GKE WI); least‑privilege RBAC per SA; document break‑glass.
+**Don’t:** `cluster-admin` for workloads; shared SAs.
 
-* No cloud-specific ingress annotations in app charts.
-* No NodePort exposure to the internet.
+### Security baseline
 
-## 4) CNI & IP design
+**Do:** PSA restricted; `runAsNonRoot`, read‑only rootFS, drop caps, seccomp; image signature verification; node/image CVE scans; CIS baselines.
+**Don’t:** `privileged`, `hostNetwork`, `hostPath` unless justified & reviewed.
 
-**Do**
+### Observability & SRE
 
-* Document Pod/Service CIDRs per environment; avoid collisions with corp networks.
-* On-prem: Cilium/Calico; AKS/EKS/GKE: native CNIs (plan IPs/ENIs carefully).
-* Decide early on **DNS, MTU, BGP** (with MetalLB).
+**Do:** kube‑prom‑stack, Loki, OTel; propagate trace IDs; SLOs & runbooks.
+**Don’t:** Vendor‑locked monitoring only; unlimited retention.
 
-**Don’t**
+### Backup/DR
 
-* Don’t assume Pod-IP behavior is identical across clouds.
+**Do:** Velero + object storage; periodic restore drills; store KMS/CA keys offsite; define RPO/RTO.
+**Don’t:** Namespace‑only backups without CRDs/cluster scope; untested DR.
 
-## 5) Storage & data
+### Releases & environments
 
-**Do**
+**Do:** Dev→Stage→Prod via promotions; Blue/Green/Canary; feature flags.
+**Don’t:** Hotfixes directly on prod; diverging chart logic per env.
 
-* **Same `StorageClass` name** everywhere (e.g., `standard`).
-* Use **CSI snapshots**; DB backups must be application-aware.
-* On-prem: **Longhorn** (simple) or **Rook-Ceph** (HA/scale).
-* Ensure **encryption at rest** for volumes/buckets; for self-managed control planes, enable **etcd encryption for Kubernetes Secrets**.
+### Resources & scheduling
 
-**Don’t**
+**Do:** Requests/Limits, HPA/VPA, PDBs, TopologySpread; taints/tolerations; ≥2 replicas for critical add‑ons with anti‑affinity.
+**Don’t:** Overcommit blindly; single‑replica SPOFs.
 
-* Don’t hard-code cloud-specific SC names.
-* Don’t “lift & shift” PVs without a migration path.
+### Compliance & data residency
 
-## 6) Secrets & keys
+**Do:** Classify data; encrypt in transit/at rest; review audit logs.
+**Don’t:** PII in logs; mix tenants in a namespace.
 
-**Do**
+### Upgrades & changes
 
-* **ESO** + environment secret store; rotation & least privilege.
-* Secrets never in ConfigMaps, repos, or TF state.
-* Encrypt secrets at rest (cloud KMS or Vault), and protect service account tokens (short-lived where possible).
+**Do:** Release calendar, semver pins, staged dry‑run, health checks & CRD migrations.
+**Don’t:** Competing CNIs/ingresses in prod “just to try”.
 
-**Don’t**
+### FinOps / cost
 
-* No static cloud keys stored as K8s Secrets.
-
-## 7) Identity & access
-
-**Do**
-
-* Workload identities: **Azure AD Workload Identity**, **EKS Pod Identity/IRSA**, **GKE Workload Identity**.
-* RBAC: least privilege, dedicated ServiceAccounts per app; document technical break-glass.
-
-**Don’t**
-
-* No workloads with `cluster-admin`.
-* No shared ServiceAccounts across services.
-
-## 8) Security baseline
-
-**Do**
-
-* PodSecurity (restricted), `runAsNonRoot`, read-only root FS, drop capabilities, seccomp.
-* Enforce signature verification (Kyverno/OPA + Cosign).
-* Routine node/image CVE scans; plan kernel & OS patches; baseline CIS hardening.
-
-**Don’t**
-
-* Avoid `privileged`, `hostNetwork`, `hostPath` unless strictly required.
-
-## 9) Observability & SRE
-
-**Do**
-
-* **kube-prometheus-stack**, **Loki**, **OTel Collector**; propagate trace IDs for correlation.
-* Define **SLOs**, alert policies, and **runbooks**; keep signals uniform across environments.
-
-**Don’t**
-
-* Don’t rely on vendor-specific monitoring only (hurts portability).
-* Don’t keep infinite retention (cost/perf issues).
-
-## 10) Backup/DR
-
-**Do**
-
-* **Velero** with object-storage backend (cloud/MinIO).
-* Routine **restore exercises** (table-top + live drill).
-* Define RPO/RTO; store KMS/CA keys offsite; document escalation paths.
-
-**Don’t**
-
-* Don’t back up only namespaces without CRDs/cluster resources.
-* Don’t accept an untested DR plan.
-
-## 11) Releases & environments
-
-**Do**
-
-* **Dev → Stage → Prod** via promotion (PR).
-* **Blue/Green/Canary** based on risk profile.
-* Prefer **feature flags** over environment-specific code.
-
-**Don’t**
-
-* No hotfixes directly on production clusters.
-* No diverging chart logic per environment (use values/overlays only).
-
-## 12) Resources & scheduling
-
-**Do**
-
-* Set **Requests/Limits**, **HPA/VPA**, **PDBs**, **TopologySpreadConstraints**.
-* Use node pools + taints/tolerations (GPU/high-mem/spot separation).
-* Run critical add-ons with ≥2 replicas; anti-affinity where relevant.
-
-**Don’t**
-
-* Don’t overcommit without controls; avoid SPOFs.
-
-## 13) Compliance & data residency
-
-**Do**
-
-* Classify data (PII/logs/backups); **encrypt in transit & at rest**.
-* Enable and review **audit logs** (API server, CI/CD, GitOps controllers).
-
-**Don’t**
-
-* No PII in logs; no tenant mixing in the same namespace.
-
-## 14) Upgrades & changes
-
-**Do**
-
-* Release calendar, semver pinning, **staged dry-run**, maintenance windows.
-* Post-upgrade health checks (API, CRD migrations, dashboard diffs).
-
-**Don’t**
-
-* Don’t run competing CNIs/ingress controllers “just to test” in prod.
-
-## 15) FinOps / cost
-
-**Do**
-
-* Label/tag resources (cost centers); quotas; bound log/trace retention.
-* Cloud: autoscaling, spot/preemptible for stateless. On-prem: capacity planning & power policies.
-
-**Don’t**
-
-* No orphaned LBs/DNS/disks/images; routine cleanup jobs.
+**Do:** Label for cost centers; quotas; cap log/trace retention; autoscale stateless; capacity plan on‑prem.
+**Don’t:** Orphan LBs/DNS/disks/images; leave cleanup unscheduled.
 
 ---
 
-# Provider mapping (compact)
+## 10) Provider Mapping (Compact)
 
-| Component         | AKS                        | EKS                         | GKE                         | On-prem                           |
-| ----------------- | -------------------------- | --------------------------- | --------------------------- | --------------------------------- |
-| **Registry**      | GHCR or ACR (optional)     | GHCR or ECR (optional)      | GHCR or GAR (optional)      | GHCR or Harbor                    |
-| Ingress/LB        | NGINX/AGIC + Azure LB      | AWS LB Controller (ALB/NLB) | GKE Ingress/Gateway + GCLB  | NGINX/Traefik + **MetalLB**       |
-| CNI               | Azure CNI                  | VPC CNI                     | Dataplane V2/Calico         | Cilium/Calico                     |
-| Block storage     | Azure Disk (CSI)           | EBS (CSI)                   | GCE-PD (CSI)                | **Longhorn**/**Rook-Ceph**        |
-| Shared FS         | Azure Files (CSI)          | EFS (CSI)                   | Filestore (CSI)             | NFS/CEPHFS                        |
-| DNS               | Azure DNS (ExternalDNS)    | Route 53 (ExternalDNS)      | Cloud DNS (ExternalDNS)     | Internal/Cloudflare (ExternalDNS) |
-| Secrets           | Azure Key Vault (ESO)      | AWS Secrets Manager (ESO)   | Google Secret Manager (ESO) | Vault/Sealed Secrets (ESO)        |
-| Workload identity | Azure AD Workload Identity | EKS Pod Identity / IRSA     | Workload Identity           | K8s SA ↔ Vault/JWT                |
-
----
-
-# Pre-flight checklist (before the first `apply`)
-
-* [ ] CIDR plan (Pod/Service/VNet/VPC) documented and collision-free.
-* [ ] DNS zones & domains (internal/external) decided; ACME challenge path defined.
-* [ ] Storage strategy per environment (SC name, driver) agreed.
-* [ ] Registry strategy (ACR/ECR/GAR/Harbor), mirrors & pull secrets prepared.
-* [ ] Secret backends & ESO providers with permissions in place.
-* [ ] Observability targets & SLOs with alert routes defined.
-* [ ] Velero backend (bucket/MinIO) available with access.
-* [ ] GitOps bootstrap repo, branch protection, CI OIDC configured.
-* [ ] Policy set (Kyverno/OPA) defined & tested (admission fail-closed).
-* [ ] Runbooks, break-glass access, and audit trail documented.
+| Component         | AKS                     | EKS                         | GKE                         | On‑Prem                           |
+| ----------------- | ----------------------- | --------------------------- | --------------------------- | --------------------------------- |
+| Registry          | GHCR or ACR             | GHCR or ECR                 | GHCR or GAR                 | GHCR or Harbor                    |
+| Ingress/LB        | NGINX/AGIC + Azure LB   | AWS LB Controller (ALB/NLB) | GKE Ingress/Gateway + GCLB  | NGINX/Traefik + **MetalLB**       |
+| CNI               | Azure CNI               | VPC CNI                     | Dataplane V2/Calico         | Cilium/Calico                     |
+| Block storage     | Azure Disk (CSI)        | EBS (CSI)                   | GCE‑PD (CSI)                | **Longhorn**/**Rook‑Ceph**        |
+| Shared FS         | Azure Files (CSI)       | EFS (CSI)                   | Filestore (CSI)             | NFS/CEPHFS                        |
+| DNS               | Azure DNS (ExternalDNS) | Route 53 (ExternalDNS)      | Cloud DNS (ExternalDNS)     | Internal/Cloudflare (ExternalDNS) |
+| Secrets           | Azure Key Vault (ESO)   | AWS Secrets Manager (ESO)   | Google Secret Manager (ESO) | Vault/Sealed Secrets (via ESO)    |
+| Workload identity | Azure AD WI             | EKS Pod Identity / IRSA     | GKE WI                      | K8s SA ↔ Vault/JWT                |
 
 ---
 
-# Go-live checklist (per environment)
+## 11) Multi‑Tenancy Model
 
-* [ ] Argo CD synced, **drift = 0**; all add-ons Ready.
-* [ ] Ingress reachable, DNS records correct, **TLS green**.
-* [ ] NetworkPolicies enforced (positive/negative connectivity tests).
-* [ ] Storage PVC/PV lifecycle validated; snapshots functioning.
-* [ ] ESO secrets materialize and rotate successfully.
-* [ ] Observability: metrics/logs/traces visible; alerts firing in test.
-* [ ] Velero: **restore test passed**.
-* [ ] SLO dashboards live; on-call informed; freeze window set.
-* [ ] Backout plan ready (DNS rollback/blue-green).
+* **Isolation:** One namespace per team/app; default‑deny; per‑namespace RBAC bindings.
+* **Quotas:** ResourceQuota + LimitRange per tenant; SLOs per service.
+* **Access:** GitHub/AAD groups map to RBAC roles; break‑glass documented.
+* **Network:** Namespace‑scoped ingress/egress; shared ingress with unique hostnames; shared observability with label‑based dashboards.
 
 ---
 
-# Weekly ops routine (short)
+## 12) Security Baseline (Fail‑Closed)
 
-* [ ] Review pending updates (cluster/add-ons); schedule rollouts.
-* [ ] Triage vulnerability reports (images/nodes).
+* **Policy:** Kyverno/Gatekeeper enforce PSA restricted, signature verification (Cosign), no `:latest`, no root, no privileged, proper health probes, required labels/owners.
+* **Supply chain:** Signed images, SBOM generation, Trivy/Grype scans in CI; block if critical CVEs without exception.
+* **Secrets:** ESO materialization; short TTL tokens; at‑rest encryption (KMS or Vault); etcd encryption on self‑managed control planes.
+* **Audit:** K8s audit policy enabled; logs shipped to Loki; change links back to Git commit.
+
+---
+
+## 13) Observability Baseline
+
+* **Metrics:** kube‑prometheus‑stack (Prometheus, Alertmanager, Grafana).
+* **Logs:** Loki (promtail/Vector).
+* **Traces:** Tempo + OpenTelemetry Collector; W3C trace propagation.
+* **Dashboards/Alerts:** Shared dashboards versioned in Git; Alertmanager routes per team; SLOs stored as code.
+
+---
+
+## 14) Backup & Disaster Recovery
+
+* **Velero:** Schedules + on‑demand; include CRDs/cluster scope; object storage backend (S3/Azure/GS/MinIO).
+* **Keys:** Offsite storage of CA/KMS keys and Argo CD admin recovery; document restoration steps.
+* **Drills:** Monthly smoke (1 namespace); quarterly full app restore; record RPO/RTO results.
+
+---
+
+## 15) DNS, TLS & Certificates
+
+* **DNS:** ExternalDNS manages A/AAAA/CNAME; cloud credentials only differ per overlay.
+* **TLS:** cert‑manager with `ClusterIssuer` names **identical** across environments (e.g., `letsencrypt-staging`, `letsencrypt-prod`).
+* **ACME:** HTTP‑01 via shared ingress; fallback to DNS‑01 when required (wildcards/private).
+
+---
+
+## 16) Storage Strategy
+
+* **Naming:** `StorageClass` **`standard`** everywhere; overlays bind to provider‑specific CSIs.
+* **On‑Prem:** Prefer **Longhorn** for simplicity or **Rook‑Ceph** for HA/scale; document failure domains & replication.
+* **Snapshots:** CSI VolumeSnapshotClass defined & tested; app‑aware DB backups separate from PVC snapshots.
+
+---
+
+## 17) GitOps & Argo CD Pattern
+
+* **Root app:** App‑of‑apps points to overlay root; sync waves order CRDs → operators → add‑ons → tenants.
+* **Policies:** Argo projects per tenant; deny cross‑namespace references; read‑only to cluster‑scoped resources unless approved.
+* **Sync:** Auto‑sync enabled in lower envs; manual sync with PR approval in prod; health & sync windows defined.
+* **Drift:** Alert on drift; block manual changes in prod.
+
+---
+
+## 18) Promotion & Releases
+
+* **Flow:** Dev → Stage → Prod via PRs (image digest bumps only).
+* **Strategies:** Blue/Green or Canary (via ingress or Service mesh if adopted).
+* **Freeze:** Change freeze windows around critical business dates.
+* **Rollback:** Declarative rollbacks via Git revert; DNS toggle for Blue/Green.
+
+---
+
+## 19) Upgrade Runbook (K8s & Add‑ons)
+
+1. Review upstream change logs; update ADR if breaking changes.
+2. Bump versions in a **stage** branch; CI runs conformance & policy tests.
+3. Deploy to **kind** + **Stage**; execute synthetic checks & chaos tests (optional).
+4. Announce maintenance window; backup etcd (self‑managed) & Velero preflight; freeze non‑essential changes.
+5. Upgrade prod in waves (CRDs first, then operators, then components); verify health & SLOs.
+6. Post‑upgrade validation; unfreeze; publish release notes.
+
+---
+
+## 20) Pre‑Flight Checklist (before first apply)
+
+* [ ] CIDR plan (Pod/Service/VNet/VPC) approved; no corporate collisions.
+* [ ] DNS zones & ACME challenge path specified.
+* [ ] Storage strategy (SC name, driver) confirmed.
+* [ ] Registry choice & credentials prepared; image signing keys ready.
+* [ ] Secret backends & ESO providers permissioned.
+* [ ] Observability targets & alert routes defined.
+* [ ] Velero backend (bucket/MinIO) available; access verified.
+* [ ] GitOps bootstrap repo with branch protection & CI OIDC ready.
+* [ ] Policy set (Kyverno/OPA) tested; admission fail‑closed.
+* [ ] Runbooks, break‑glass accounts, and audit policy documented.
+
+---
+
+## 21) Go‑Live Checklist (per environment)
+
+* [ ] Argo CD synced, **drift = 0**; all add‑ons **Ready**.
+* [ ] Ingress reachable; DNS records correct; **TLS green**.
+* [ ] NetworkPolicies enforced (positive/negative tests).
+* [ ] Storage PVC lifecycle & snapshots validated.
+* [ ] ESO secrets materialize & rotate.
+* [ ] Observability dashboards & alerts live; test alerts received.
+* [ ] Velero restore **passed** (smoke).
+* [ ] SLO dashboards live; on‑call informed; freeze window set.
+* [ ] Backout plan rehearsed.
+
+---
+
+## 22) Weekly Ops Routine (short)
+
+* [ ] Review pending updates (cluster/add‑ons).
+* [ ] Triage vulnerabilities (images/nodes).
 * [ ] Inspect cost drivers (LBs/disks/logs).
 * [ ] Perform a Velero restore smoke (1 namespace).
-* [ ] Fix policy violations/drift.
+* [ ] Resolve policy violations/drift.
 
 ---
 
-# Anti-patterns (red card)
+## 23) Anti‑Patterns (Red Card)
 
-* Cloud annotations / SC names in app charts.
-* `kubectl apply` to prod from developer laptops.
-* Secrets/keys in repo or TF state.
-* `:latest` / mutable tags; unsigned images.
-* No default-deny or missing RBAC segmentation.
+* Cloud annotations or provider SC names in app charts.
+* `kubectl apply` to production from laptops.
+* Secrets/keys in Git or Terraform state.
+* Mutable tags (`:latest`) or unsigned images.
+* Missing default‑deny or weak RBAC.
 * Backups without restore drills.
-* Inconsistent names across environments (Issuer/Ingress/SC).
-* Click-ops in portals alongside Terraform/GitOps.
+* Inconsistent names (Issuer/Ingress/SC) across environments.
+* Parallel click‑ops alongside Terraform/GitOps.
 
-**Last Updated:** 09.10.2025  
-**Status:** Living document - update when architectural decisions change
+---
+
+## 24) ADRs, Naming & Conventions
+
+* **ADRs:** Every significant decision (CNI, ingress, storage, policy engine) recorded with context, options, decision, consequences.
+* **Names:**
+
+  * IngressClass: `nginx`
+  * StorageClass: `standard`
+  * ClusterIssuers: `letsencrypt-staging`, `letsencrypt-prod`
+  * Pull secret: `registry-credentials`
+  * Team namespaces: `team-<name>`; apps: `app-<name>`
+* **Labels/Annotations:** `owner`, `team`, `cost-center`, `app`, `env`, `version`, `commit`.
+
+---
+
+## 25) Overlay Guidance (What May Differ by Provider)
+
+* **Load Balancer:** Cloud LB vs. MetalLB IP pools/BGP.
+* **DNS credentials:** Azure/Route53/CloudDNS vs. internal provider.
+* **CSI drivers:** Azure Disk/Files, EBS/EFS, GCE‑PD/Filestore vs. Longhorn/Ceph.
+* **Workload identity:** AAD WI / IRSA / GKE WI vs. Vault‑JWT.
+
+> **Everything else stays constant** (ingress class name, storage class name, issuer names, RBAC patterns, observability stack, policy sets).
+
+---
+
+## 26) Example Test Scenarios (Portability Contracts)
+
+* Deploy a reference app with: Ingress (host), PVC (`standard`), Secret (ESO), ConfigMap, HPA.
+* Negative admission tests: unsigned image, `runAsRoot`, missing probes, `:latest`.
+* Network tests: namespace default‑deny, allow only needed egress (DNS, registry).
+* DR test: backup+restore of app namespace; assert identical DNS/TLS post‑restore.
+
+---
+
+## 27) Governance & Process
+
+* **Change management:** PR templates require risk, rollback & observability notes.
+* **Approvals:** Two‑person rule for prod changes; security review for policy relaxations.
+* **Exceptions:** Time‑bound with expiry; tracked in Git; alert on expiry.
+* **Audits:** Quarterly review of RBAC, policies, and DR results.
+
+---
+
+## 28) Readiness to Scale (Future‑Proofing)
+
+* **Gateway API** to replace classic Ingress incrementally.
+* **Cilium** with eBPF for advanced networking & policy; cluster mesh later if needed.
+* **Fleet mgmt** (Argo CD + Projects or Rancher) once multi‑cluster is in scope.
+* **SPIFFE/SPIRE** for workload identity hardening if required.
+
+---
+
+## 29) Conclusion
+
+This document provides **decision‑grade guardrails** that keep the platform portable, secure, and reproducible. If followed, it will **lead directly to the stated goal**: a platform you can bring up on any on‑prem Linux machine **and** any major cloud (AKS/EKS/GKE) from the **same Git repository**, with identical application manifests and **no manual clicks** to production.
+
+> **Action:** Implement the repo skeleton, bootstrap Terraform + Argo CD, and enforce the policies as code. Keep this document updated via PRs as architectural decisions evolve.
