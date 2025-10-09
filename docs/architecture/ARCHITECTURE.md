@@ -1,6 +1,32 @@
 # Goal (precise)
 
-A **cloud-agnostic Kubernetes platform** that is reproducibly deployed from **one Git repository** via **GitOps** to **AKS** and **on-prem** (k3s/RKE2/kubeadm), keeping **application manifests unchanged** while **provider specifics live only in environment overlays**. The platform enforces a **security baseline** (Pod Security, least-privilege RBAC, NetworkPolicies, signed images), **standardized observability** (metrics/logs/traces), and **verifiable backups/DR**. **No click-ops**; all changes are **PR- and audit-driven**. **Success criteria:** fresh deployments of both environments from the repo; workloads reachable via **DNS+TLS**; **policy gates green**; **Velero restore proven**—within a defined time budget.
+Build an **enterprise-grade, production-ready Kubernetes platform template** that can be deployed to **any environment** (managed cloud or on-prem) from **a single Git repository** via **GitOps**, with **zero application code changes** between environments.
+
+**What we're building:**
+* **GitOps-driven platform** (Argo CD) managing cluster infrastructure (networking, storage, secrets, observability, policies)
+* **Environment-agnostic application manifests** in `clusters/base/` that run identically everywhere
+* **Provider-specific overlays** in `clusters/overlays/{aks,eks,gke,onprem}/` that adapt only infrastructure components
+* **Security-first architecture** with Pod Security, NetworkPolicies, RBAC, signed images, and audit logging built-in
+* **Multi-tenancy support** via namespace isolation, resource quotas, and per-team RBAC
+* **Automated disaster recovery** with Velero backups and proven restore procedures
+
+**Target deployments:**
+1. **Local testing:** kind cluster (ephemeral, Docker-based, for CI/CD validation)
+2. **Cloud production:** AKS/EKS/GKE (managed Kubernetes with cloud-native integrations)
+3. **On-prem production:** Self-managed Kubernetes via kubeadm (customer VM, bare metal, private cloud) or RKE2 (hardened for compliance)
+
+**Success criteria:**
+* Fresh cluster deployed from Git in under 30 minutes
+* Application workloads accessible via **DNS+TLS** (Let's Encrypt)
+* **Policy gates enforced** (Kyverno/OPA blocking non-compliant deployments)
+* **Velero backup+restore tested** and passing
+* **Full audit trail** of all changes via Git history + K8s audit logs
+* **Zero manual clicks** in cloud portals or kubectl commands to production
+
+**Non-goals:**
+* Application-specific configurations (belongs in app repos, not platform repo)
+* Multi-cluster management (focus is single-cluster reproducibility first)
+* Day-2 operation automation beyond GitOps sync (monitoring/alerting setup only)
 
 ---
 
@@ -10,7 +36,7 @@ A **cloud-agnostic Kubernetes platform** that is reproducibly deployed from **on
    *Infra (Terraform) ⟂ Cluster add-ons (GitOps) ⟂ Apps (GitOps)*. No mixing.
 
 2. **One repo—multiple overlays:**
-   `clusters/base` (shared baseline) + `overlays/{aks,onprem,eks,gke}` for provider details only.
+   `clusters/base` (shared baseline) + `overlays/{aks,eks,gke,onprem}` for provider details only.
 
 3. **Naming consistency everywhere:**
    Keep identical names: `ingressClassName`, `StorageClass` (e.g., `standard`), `ClusterIssuer` (e.g., `letsencrypt-prod`), Secret/ServiceAccount names.
@@ -43,7 +69,7 @@ A **cloud-agnostic Kubernetes platform** that is reproducibly deployed from **on
 **Provisioning & governance**
 
 * **Terraform** (infra to GitOps bootstrap), remote state with locking.
-* **GitOps:** **Flux** *or* **Argo CD** (choose one and be consistent).
+* **GitOps:** **Argo CD** (CLI-first, declarative, CNCF graduated—chosen for agent-friendly automation).
 * **Policy:** **Kyverno** *or* **OPA Gatekeeper** (policy checks before sync).
 
 **Networking & entry**
@@ -82,7 +108,94 @@ A **cloud-agnostic Kubernetes platform** that is reproducibly deployed from **on
 
 ---
 
-# Do’s & Don’ts by domain
+# Container Registry Strategy
+
+**Purpose:**
+A container registry stores and distributes Docker/OCI images for your Kubernetes workloads. Essential for: centralized versioning, access control, security scanning, and CI/CD automation. **Eliminates Docker Hub rate limits** (200 pulls/6h for anonymous users) and enables enterprise features like geo-replication and compliance auditing.
+
+**Registry by Environment:**
+
+| Environment | Registry | When to Use | Cost | Authentication |
+|-------------|----------|-------------|------|----------------|
+| **Local (kind)** | GHCR | Always | 0 € | GitHub PAT |
+| **Cloud (AKS/EKS/GKE)** | GHCR → ACR/ECR/GAR | Start GHCR, add cloud-native for geo-replication/scanning | 0-10 €/month | Workload Identity |
+| **On-Prem (customer VM)** | GHCR or Harbor | GHCR if internet, Harbor for air-gapped | 0 € (GHCR) | PAT or Basic Auth |
+
+**Decision Rules:**
+* **Start with GHCR everywhere** (free, works across all clouds)
+* **Add ACR/ECR/GAR when:** Private images, geo-replication, built-in scanning, or compliance required
+* **Use Harbor when:** Air-gapped on-prem (no internet access)
+
+**Implementation:**
+* Images pinned by digest: `image: myapp:v1.0.0@sha256:abc123...`
+* Cosign signatures verified by admission controller
+* Base manifests use `${REGISTRY}` variable, overlays set specific registry
+* Pull secrets consistently named: `registry-credentials`
+
+---
+
+# Kubernetes Cluster Options
+
+**Purpose:**
+Choose the right Kubernetes distribution based on deployment environment, control requirements, and operational constraints.
+
+**Cluster Types by Environment:**
+
+| Environment | Cluster Type | Distribution | Setup Complexity | Resources | Control Plane |
+|-------------|--------------|--------------|------------------|-----------|---------------|
+| **Local (dev/test)** | Ephemeral | kind | Low (1 command) | 2 GB RAM | Local Docker |
+| **Cloud (managed)** | Production | AKS/EKS/GKE | Medium (Terraform) | Managed | Cloud-managed |
+| **On-Prem (production)** | Production | Kubernetes (kubeadm) or RKE2 | High | 4+ GB RAM | Self-managed |
+
+**Decision Matrix:**
+
+**Use kind when:**
+* Local development and testing
+* Need 100% upstream Kubernetes (no customizations)
+* Multi-node testing required (HA simulation)
+* Fast cluster creation/deletion cycles
+
+**Use AKS/EKS/GKE when:**
+* Managed control plane required (no K8s ops team)
+* Cloud-native integrations needed (Load Balancer, DNS, Key Vault, etc.)
+* Auto-scaling and auto-upgrades desired
+* Budget allows managed services (~60-150 €/month)
+
+**Use Kubernetes (kubeadm) when:**
+* **Standard for all production deployments** (enterprise, SMB, startup)
+* Full control over every component (CNI, CSI, ingress, observability)
+* **On-prem installations** (customer VM, bare metal, private cloud)
+* Compliance/audit requirements (security teams prefer upstream K8s)
+* Team has Kubernetes experience (or learning via CKA/CKAD/CKS)
+* Need to match managed cloud behavior (AKS/EKS/GKE use upstream K8s)
+* Multi-tenancy with strict namespace isolation and resource quotas
+* **Scales from small (single node) to large (1000+ nodes)**
+
+**Use RKE2 when:**
+* Government or finance sector with **FIPS 140-2** requirements
+* Security compliance mandates (CIS benchmarks pre-hardened)
+* Hardened by default needed (SELinux, AppArmor, seccomp enforced)
+* Rancher-managed fleet (centralized multi-cluster management)
+
+**Key Point:** All distributions are **100% API-compatible** (CNCF certified). App manifests work identically everywhere.
+
+**What's identical across all distributions:**
+* `kubectl` commands and API
+* Helm charts and operators
+* CRDs and custom resources
+* Container runtime (containerd)
+* Networking primitives (Services, Pods)
+* Storage primitives (PVCs, StorageClasses)
+
+**What differs (handled by overlays):**
+* Control plane management: Managed (AKS/EKS/GKE) vs. self-managed (kubeadm/RKE2)
+* Load balancer: Cloud LB (AKS/EKS/GKE) vs. MetalLB (on-prem)
+* DNS integration: Cloud DNS (Azure/Route53/CloudDNS) vs. internal/Cloudflare
+* Default components: Managed services (cloud) vs. self-installed (on-prem kubeadm requires manual CNI/CSI/ingress setup)
+
+---
+
+# Do's & Don'ts by domain
 
 ## 1) Terraform & IaC
 
@@ -279,6 +392,7 @@ A **cloud-agnostic Kubernetes platform** that is reproducibly deployed from **on
 
 | Component         | AKS                        | EKS                         | GKE                         | On-prem                           |
 | ----------------- | -------------------------- | --------------------------- | --------------------------- | --------------------------------- |
+| **Registry**      | GHCR or ACR (optional)     | GHCR or ECR (optional)      | GHCR or GAR (optional)      | GHCR or Harbor                    |
 | Ingress/LB        | NGINX/AGIC + Azure LB      | AWS LB Controller (ALB/NLB) | GKE Ingress/Gateway + GCLB  | NGINX/Traefik + **MetalLB**       |
 | CNI               | Azure CNI                  | VPC CNI                     | Dataplane V2/Calico         | Cilium/Calico                     |
 | Block storage     | Azure Disk (CSI)           | EBS (CSI)                   | GCE-PD (CSI)                | **Longhorn**/**Rook-Ceph**        |
@@ -306,7 +420,7 @@ A **cloud-agnostic Kubernetes platform** that is reproducibly deployed from **on
 
 # Go-live checklist (per environment)
 
-* [ ] Flux/Argo synced, **drift = 0**; all add-ons Ready.
+* [ ] Argo CD synced, **drift = 0**; all add-ons Ready.
 * [ ] Ingress reachable, DNS records correct, **TLS green**.
 * [ ] NetworkPolicies enforced (positive/negative connectivity tests).
 * [ ] Storage PVC/PV lifecycle validated; snapshots functioning.
@@ -339,5 +453,5 @@ A **cloud-agnostic Kubernetes platform** that is reproducibly deployed from **on
 * Inconsistent names across environments (Issuer/Ingress/SC).
 * Click-ops in portals alongside Terraform/GitOps.
 
-**Last Updated:** 06.01.2025  
+**Last Updated:** 09.10.2025  
 **Status:** Living document - update when architectural decisions change
