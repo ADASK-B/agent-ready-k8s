@@ -68,6 +68,7 @@
 - [§37 Version & Support Policy](#37-version--support-policy)
 - [§38 Root of Trust & Key Management](#38-root-of-trust--key-management)
 - [§39 Incident Response & Forensics](#39-incident-response--forensics)
+- [§40 Platform Decommission & Exit Runbook](#40-platform-decommission--exit-runbook)
 
 ---
 
@@ -275,6 +276,17 @@ All are **CNCF-certified** → API-compatible; app manifests run unchanged.
 **Do:** One `IngressClass`; `Service` type LB (MetalLB on-prem); default-deny NetworkPolicies; ExternalDNS everywhere.
 **Don’t:** Cloud-specific ingress annotations in apps; internet-facing NodePorts.
 
+
+### Egress & External Dependencies
+
+**Allowed egress targets (enforced via NetworkPolicies):**
+* **DNS:** Cluster CoreDNS (UDP/53) + external DNS (1.1.1.1, 8.8.8.8).
+* **NTP:** Public NTP pools (UDP/123) or internal time servers.
+* **OCSP/CRL:** Certificate revocation checks (HTTP/80, HTTPS/443).
+* **Registries:** GHCR, ACR/ECR/GAR, Harbor (allow by FQDN + IP ranges).
+* **Cloud APIs:** Azure/AWS/GCP for Workload Identity, ESO, CSI (HTTPS/443).
+
+**Deny by default:** All egress blocked (deny-all baseline per namespace, see §11).
 ### CNI & IP design
 
 **Do:** Document Pod/Service CIDRs; pick Cilium/Calico on-prem; plan MTU/BGP (MetalLB).
@@ -1197,5 +1209,60 @@ This document provides **decision-grade guardrails** that keep the platform port
 * Don't skip evidence preservation in security incidents (legal/compliance risk).
 * Don't ignore postmortem action items (technical debt compounds).
 * Don't blame individuals in postmortems (focus on systems/processes).
+
+---
+
+## 40) Platform Decommission & Exit Runbook
+
+**Purpose:** Safe, auditable process for complete platform shutdown (cluster, infra, data) with compliance.
+
+### 40.1) Decommission Triggers
+
+* Business decision to sunset platform or migrate to alternative.
+* Cloud provider migration (lift-and-shift).
+* End of project/contract requiring full teardown.
+* Security incident requiring infrastructure wipe.
+
+### 40.2) Pre-Decommission Checklist
+
+* [ ] **Business approval:** Executive sign-off; documented reason.
+* [ ] **Tenant notification:** 90-day advance notice (unless emergency).
+* [ ] **Data inventory:** All PVCs, Secrets, backups, logs requiring retention.
+* [ ] **Compliance review:** Confirm retention obligations (GDPR, contracts).
+
+### 40.3) Data Archival & Retention
+
+* **Velero backups:** Final full backup; store offsite (S3/Azure/GCS) with WORM protection.
+* **Logs & metrics:** Export Loki (last 90d), Prometheus snapshots, audit logs to cold storage.
+* **Git history:** Archive manifests, Terraform state to secure offline storage.
+* **Certificates & keys:** Export CA certs, backup keys; store in secure vault.
+* **Retention:** Default **7 years** (compliance); verify with legal.
+
+### 40.4) Phased Decommission Procedure
+
+**Phase 1: Workload Shutdown (Day 0-30)**
+1. Scale tenant workloads to 0 replicas.
+2. Disable Ingress (remove DNS records).
+3. Revoke external access (Workload Identity, ESO, API keys).
+4. Final Velero backup + verification.
+
+**Phase 2: Infrastructure Cleanup (Day 30-60)**
+1. Delete all namespaces: `kubectl delete namespace --all`.
+2. Destroy cluster via Terraform or manual teardown.
+3. Cleanup cloud resources: LBs, public IPs, DNS zones, PVs, Key Vaults, IAM roles.
+4. Delete Terraform state backend after verifying no dependencies.
+
+**Phase 3: Security Hygiene (Day 60+)**
+1. Revoke Cosign keys (KMS/Vault), etcd encryption keys.
+2. Generate final audit report; store with archival data.
+3. Verify cleanup: $0 cloud spend, no orphaned resources.
+
+### 40.5) Post-Decommission Validation
+
+* [ ] Cloud billing shows **$0** monthly charges.
+* [ ] DNS queries return **NXDOMAIN**.
+* [ ] No active service principals or IAM roles.
+* [ ] Archival data accessible only to legal/compliance (MFA + audit).
+* [ ] Decommission report filed with date, approvers, audit trail.
 
 
