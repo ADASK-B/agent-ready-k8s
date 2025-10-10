@@ -337,6 +337,48 @@ All are **CNCF‑certified** → API‑compatible; app manifests run unchanged.
 
 ---
 
+## 16.5) etcd Management (Self‑Managed Clusters Only)
+
+**Scope:** Applies to **on‑prem kubeadm/RKE2 only**. Managed cloud (AKS/EKS/GKE) handles etcd automatically.
+
+**Purpose:** etcd is Kubernetes' central database storing all cluster state, secrets, configurations, and **multi‑tenancy namespace isolation**. Loss or corruption of etcd means **total cluster failure** affecting all tenants.
+
+**High Availability Requirements:**
+* **3 or 5 etcd nodes** (odd number for quorum): 3 nodes tolerate 1 failure; 5 nodes tolerate 2 failures.
+* **Dedicated nodes** separate from workload nodes: etcd requires consistent low‑latency disk I/O.
+* **Geographic distribution** (multi‑datacenter): ensure network latency < 10ms between etcd nodes.
+* **No single‑node etcd in production**: violates HA principle; creates single point of failure.
+
+**Encryption at Rest (Mandatory):**
+* **Enable Kubernetes EncryptionConfiguration** for Secrets stored in etcd.
+* **Rotate encryption keys annually**: maintain old key during migration; document rotation procedure in runbook.
+* **Protect encryption key files** with OS‑level permissions (600, root‑only access).
+* **Multi‑tenancy critical**: without encryption, all tenant secrets readable from etcd data files.
+
+**Backup Strategy:**
+* **Automated snapshots** every 6–12 hours; store offsite (S3/MinIO/Azure Blob).
+* **Retention policy**: minimum 7 days; align with RPO/RTO requirements.
+* **Test restores quarterly** as part of DR drill (Section 14); untested backups are not backups.
+* **Store alongside Velero**: etcd snapshots complement application‑level backups.
+
+**Monitoring & Alerting:**
+* **Critical metrics**: Leader election status, database size growth, peer latency, disk IOPS saturation.
+* **Alert thresholds**: Leader loss, peer latency > 100ms, disk space > 80%, WAL sync duration spikes.
+* **Dashboard**: Include etcd health in platform observability (Section 13); version in Git.
+
+**Disaster Recovery:**
+* **Document restore runbook** in Git: stop API server → restore snapshot → reconfigure data‑dir → restart cluster.
+* **Practice in stage environment** quarterly; record time‑to‑recovery; update RPO/RTO.
+* **Offsite key storage**: CA certificates, encryption keys, Argo CD admin credentials.
+
+**Don'ts:**
+* Don't run etcd on high‑I/O shared disks (use dedicated SSD/NVMe).
+* Don't skip encryption at rest (compliance violation; tenant secrets exposed).
+* Don't assume backups work without restore testing (Section 14 drill mandate).
+* Don't run single‑node etcd in production (no HA = SPOF for all tenants).
+
+---
+
 ## 17) GitOps & Argo CD Pattern
 
 * **Root app:** App‑of‑apps points to overlay root; sync waves order CRDs → operators → add‑ons → tenants.
