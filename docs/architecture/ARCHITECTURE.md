@@ -242,6 +242,11 @@ repo/
 
 **Rules:** Pin by **digest**; verify **Cosign** signatures via policy; `${REGISTRY}` variable in bases, set per overlay; pull secret named `registry-credentials` consistently.
 
+**Multi-architecture support (ARM/AMD):**
+* **Build:** Use `docker buildx` or `kaniko` to create **multi-arch manifests** (linux/amd64, linux/arm64).
+* **Promotion:** Promote images by **digest** (not tag) to ensure bit-identical binaries across environments; prevents node-arch drift on-prem (mixed AMD/ARM clusters).
+* **Validation:** CI tests run on both AMD64 and ARM64 runners; block merge if either arch fails.
+
 ---
 
 ## 8) Cluster Options & Decision Guide
@@ -280,13 +285,15 @@ All are **CNCF-certified** → API-compatible; app manifests run unchanged.
 ### Egress & External Dependencies
 
 **Allowed egress targets (enforced via NetworkPolicies):**
-* **DNS:** Cluster CoreDNS (UDP/53) + external DNS (1.1.1.1, 8.8.8.8).
+* **DNS:** Cluster CoreDNS (UDP/53) + external DNS (overlay variable: `${EXTERNAL_DNS_IPS}` → e.g., 1.1.1.1, 8.8.8.8 public or corporate DNS).
 * **NTP:** Public NTP pools (UDP/123) or internal time servers.
 * **OCSP/CRL:** Certificate revocation checks (HTTP/80, HTTPS/443).
-* **Registries:** GHCR, ACR/ECR/GAR, Harbor (allow by FQDN + IP ranges).
+* **Registries:** GHCR, ACR/ECR/GAR, Harbor (allow by **FQDN** via Cilium/Calico DNS policies + IP ranges as fallback).
 * **Cloud APIs:** Azure/AWS/GCP for Workload Identity, ESO, CSI (HTTPS/443).
 
 **Deny by default:** All egress blocked (deny-all baseline per namespace, see §11).
+
+**FQDN-based policies:** Prefer DNS-aware policies (Cilium CiliumNetworkPolicy, Calico GlobalNetworkPolicy with DNS) over static IPs; run monthly IP drift tests (verify registry IPs haven't changed).
 ### CNI & IP design
 
 **Do:** Document Pod/Service CIDRs; pick Cilium/Calico on-prem; plan MTU/BGP (MetalLB).
@@ -384,6 +391,33 @@ All are **CNCF-certified** → API-compatible; app manifests run unchanged.
 * **Quotas:** ResourceQuota + LimitRange per tenant; SLOs per service.
 * **Access:** GitHub/AAD groups map to RBAC roles; break-glass documented.
 * **Network:** Namespace-scoped ingress/egress; shared ingress with unique hostnames; shared observability with label-based dashboards.
+
+### 11.7) Break-Glass Access (Emergency Admin)
+
+**Purpose:** Controlled emergency access for critical incidents when normal RBAC is insufficient or compromised.
+
+**Triggers:**
+* Control plane failure (Argo CD/GitOps down, cannot sync changes).
+* Identity provider outage (Azure AD/GitHub OIDC unavailable).
+* Security incident requiring immediate isolation (compromised service account).
+
+**Break-glass credentials:**
+* **Storage:** Sealed in secure offline vault (password manager, HSM, physical safe); require 2-person retrieval.
+* **Type:** Kubernetes ServiceAccount with `cluster-admin` role; **1-hour TTL** token (generated on-demand).
+* **Access path:** Only from **dedicated bastion host** (IP allowlisted in API server `--authorization-webhook-config`).
+
+**Activation procedure:**
+1. Incident Commander declares break-glass necessity; logs reason in incident ticket.
+2. Two authorized personnel retrieve sealed credentials from vault.
+3. Generate short-lived token: `kubectl create token break-glass-admin --duration=1h`.
+4. Connect via bastion host; perform emergency action; document all commands in incident log.
+5. Revoke token immediately after use (or wait for 1h expiry).
+6. Post-incident: Rotate break-glass SA; review audit logs; update runbooks.
+
+**Audit trail:**
+* All break-glass API calls logged to Kubernetes audit log + Loki (cannot be disabled).
+* Alert fires on break-glass SA usage → escalates to security team + management.
+* Monthly review: Verify no unauthorized break-glass usage; test retrieval procedure (dry-run).
 
 ### 11.5) Tenant Onboarding & Access Pattern (optional Azure DevOps alignment)
 
@@ -489,6 +523,19 @@ All are **CNCF-certified** → API-compatible; app manifests run unchanged.
 * **Audit logs:** Do NOT redact (compliance requires full trail); separate retention (≥ 2 years).
 * **Enforcement:** Loki LogQL queries block queries returning redacted fields; CI checks scan log statements for PII patterns.
 
+**Log retention by class (consolidated):**
+
+| Log Class | Retention (Prod) | Retention (Stage/Dev) | Storage Tier | Rationale |
+|-----------|-----------------|----------------------|--------------|-----------|
+| **Application Logs** | 30 days | 7 days | Hot (Loki) | Debugging, performance analysis |
+| **Infrastructure Logs** (K8s events, CNI, CSI) | 30 days | 7 days | Hot (Loki) | Cluster troubleshooting |
+| **Audit Logs** (K8s API, RBAC, policy) | **≥ 2 years** | 90 days | Cold (S3/Blob) | Compliance (ISO 27001, SOC 2, NIS2) |
+| **Forensic/Incident Logs** | **≥ 2 years** (legal hold: 7 years) | N/A | WORM (immutable) | Evidence preservation, legal |
+| **Metrics** (Prometheus) | 15 days | 7 days | Hot (TSDB) | SLO/SLI tracking |
+| **Traces** (Tempo) | 3 days | 1 day | Hot | Performance profiling |
+
+*Retention extends automatically during legal hold (see §39.5).*
+
 ---
 
 ## 13) Observability Baseline
@@ -497,6 +544,13 @@ All are **CNCF-certified** → API-compatible; app manifests run unchanged.
 * **Logs:** Loki (promtail/Vector).
 * **Traces:** Tempo + OpenTelemetry Collector; W3C trace propagation.
 * **Dashboards/Alerts:** Shared dashboards versioned in Git; Alertmanager routes per team; SLOs stored as code.
+
+**Mandatory baseline dashboards (must exist in all environments):**
+1. **SLO Burn Rate** - Multi-window burn rate alerts (1h/6h); error budget remaining; historical trends.
+2. **Certificate Expiry** - All cert-manager certs grouped by namespace; alert < 14 days; renewal history.
+3. **External Probe Health** - Synthetic monitoring results (§13.6); DNS/TLS/HTTP status per endpoint; P95 latency.
+
+*These 3 dashboards are required for audits; templates versioned in `observability/dashboards/` in Git.*
 
 ### 13.5) SLOs, SLIs & Error Budgets (platform defaults)
 
@@ -670,6 +724,11 @@ Track in Prometheus and alert on:
 * **Freeze:** Change freeze windows around critical business dates.
 * **Rollback:** Declarative rollbacks via Git revert; DNS toggle for Blue/Green.
 
+**Multi-arch promotion:**
+* Images promoted by **digest** (e.g., `sha256:abc123...`) to ensure identical manifest across environments.
+* Prevents arch-specific bugs (AMD workload scheduled on ARM node or vice versa).
+* CI verifies manifest includes both `linux/amd64` and `linux/arm64` before promotion approval.
+
 ### 18.1) Change-Management Gates (required checks before Prod)
 
 * **Policy bundle pass:** PSA restricted, Kyverno/Gatekeeper constraints, default-deny NP tests.
@@ -677,6 +736,12 @@ Track in Prometheus and alert on:
 * **Vulnerability budget:** No **Critical** CVEs; **High** CVEs must have approved exceptions w/ expiry.
 * **Conformance tests green:** §34 suite (ingress, PVC, ESO, policies, DR smoke) passed in Stage within last 24h.
 * **SLO impact check:** No open P1 incidents; error-budget not exhausted (see §13.5 for SLO definitions).
+
+**Policy tests as code:**
+* **Tools:** `kyverno-cli test` or `gator test` (OPA Gatekeeper) + `kuttl` for integration tests.
+* **Location:** `tests/policy/` in Git repository.
+* **Coverage:** Positive cases (valid workloads pass) + negative cases (invalid workloads blocked: unsigned image, runAsRoot, missing probes).
+* **CI integration:** Policy tests run on every PR; block merge if any test fails.
 
 ---
 
@@ -1074,6 +1139,23 @@ This document provides **decision-grade guardrails** that keep the platform port
 * **TUF mirror:** Local TUF repository mirroring upstream package metadata; validates integrity.
 * **Key escrow:** Offline HSM stores root keys; intermediate keys in Vault for daily operations.
 * **Sync cadence:** Weekly sync of transparency logs and metadata when air-gap permits (sneakernet or controlled connection).
+
+### 38.8) SBOM & Attestation Visibility (Workload Trust Dashboard)
+
+**Purpose:** Provide real-time visibility into image trust posture for security teams and auditors.
+
+**Implementation:**
+* **Grafana dashboard tile:** "Image Trust Status" per namespace/workload.
+* **Portal/UI integration:** Custom Kubernetes dashboard (e.g., K9s plugin, Lens extension, web UI) showing:
+  * ✅ **Signature verified** (Cosign signature valid, public key matches).
+  * ✅ **Provenance present** (SLSA attestation found, builder identity confirmed).
+  * ✅ **CVE scan recent** (last scan < 7 days; no Critical CVEs).
+  * ⚠️ **Warning states:** Signature missing, provenance outdated, High CVEs present.
+  * ❌ **Blocked:** Critical CVE or policy violation.
+
+**Data source:** Query Kubernetes admission logs (Kyverno/OPA decisions) + container registry metadata (SBOM, scan results) via API.
+
+**Alerting:** Fire alert if > 5% of workloads in namespace show trust warnings; escalate to security team.
 
 **Don'ts:**
 * Don't store private keys in Git, Terraform state, or Kubernetes Secrets (use KMS/Vault).
