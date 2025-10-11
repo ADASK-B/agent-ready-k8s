@@ -73,28 +73,124 @@
 
 ---
 
-### **Tabelle 6: End-to-End Workflow**
-
-| Step | User Action | System Reaction | Stored Where? | Latency |
-|------|-------------|-----------------|---------------|---------|
-| **1. Registration** | "Create Org: ACME Corp" | Backend → PostgreSQL + K8s API | PostgreSQL + etcd | ~120ms |
-| **2. Login** | Email + Password | JWT Token via OAuth2-Proxy | - | ~50ms |
-| **3. Create Project** | "Create Project: Notes App" | Backend → PostgreSQL (project_id) | PostgreSQL | ~10ms |
-| **4. Write Note** | "Meeting with customer" | Backend → PostgreSQL (notes table) | PostgreSQL (in Namespace Pod) | ~10ms |
-| **5. Change AI-Threshold** | Slider: 0.75 → 0.90 | PostgreSQL + Redis PUBLISH | PostgreSQL + Redis | ~15ms |
-| **6. AI Receives Update** | Redis SUBSCRIBE Event | Pod Memory: `threshold = 0.90` | Pod RAM | <100ms |
-| **7. Next AI Request** | Uses new threshold | - | - | - |
+## 📊 Tabelle 6: Workflow-Übersicht (End-to-End) - NACH SPEICHER-BEREICHEN
 
 ---
 
-## 🎯 Core Principles
+### **🗄️ BEREICH A: TENANT & INFRASTRUKTUR (PostgreSQL + etcd)**
+> **Was:** Org-Erstellung, K8s-Ressourcen (Namespace, Quotas, Network)  
+> **Wofür:** Grundlegende Tenant-Isolation und Ressourcen-Limits
 
-| Principle | Rule | Why? |
-|-----------|------|------|
-| **Separation of Concerns** | etcd = K8s, PostgreSQL = App, Redis = Cache | Each system for its purpose |
-| **Self-Service** | User creates tenant → API → Operator → Namespace | Like Azure (no manual intervention) |
-| **Hot-Reload** | PostgreSQL (Persistent) + Redis (Real-Time) | Best of both worlds |
-| **Cloud-Agnostic** | Open Source Stack (K8s, PostgreSQL, Redis) | No vendor lock-in |
+| Schritt | User-Aktion | System-Reaktion | Wo gespeichert? | Latenz | Beispiel/Details |
+|---------|-------------|-----------------|-----------------|--------|------------------|
+| **1a. Registrierung** | "Create Org: ACME Corp" | Backend → PostgreSQL + K8s API | PostgreSQL + etcd | ~120ms | **Org-Erstellung:**<br>• DB: `organizations` (id, name, owner_email)<br>• K8s: `kubectl create namespace org-acme` |
+| **1b. Initial Storage** | System setzt Default: 10GB | Backend → K8s API | etcd + PostgreSQL | ~20ms | **Storage Init:**<br>• K8s: `ResourceQuota` (storage: 10Gi)<br>• DB: `service_configs` (Audit-Log) |
+| **1c. Initial CPU/Memory** | System setzt Default: CPU=10, Memory=20Gi | Backend → K8s API | etcd + PostgreSQL | ~20ms | **Compute Init:**<br>• K8s: `ResourceQuota` (cpu: 10, memory: 20Gi)<br>• DB: `service_configs` (Audit-Log) |
+| **1d. NetworkPolicy** | System aktiviert Isolation | Backend → K8s API | etcd | ~20ms | **Network Init:**<br>• K8s: `NetworkPolicy` (deny-all baseline) |
+
+---
+
+### **🔐 BEREICH B: AUTHENTIFIZIERUNG (JWT Token)**
+> **Was:** User-Login, Token-Generierung  
+> **Wofür:** Zugriffskontrolle, Session-Management
+
+| Schritt | User-Aktion | System-Reaktion | Wo gespeichert? | Latenz | Beispiel/Details |
+|---------|-------------|-----------------|-----------------|--------|------------------|
+| **2. Login** | Email + Passwort | JWT Token via OAuth2-Proxy | - (ephemeral) | ~50ms | **Auth:**<br>• Token: `org_id=123`, `user_role=admin`, `permissions=[...]` |
+
+---
+
+### **📦 BEREICH C: BUSINESS-DATEN (PostgreSQL)**
+> **Was:** User-Daten (Projekte, Notizen, Dokumente)  
+> **Wofür:** Eigentliche App-Funktionalität
+
+| Schritt | User-Aktion | System-Reaktion | Wo gespeichert? | Latenz | Beispiel/Details |
+|---------|-------------|-----------------|-----------------|--------|------------------|
+| **3. Projekt erstellen** | "Create Project: Notes App" | Backend → PostgreSQL | PostgreSQL | ~10ms | **Project:**<br>• Tabelle: `projects` (id, name, org_id) |
+| **4. Notiz schreiben** | "Meeting with customer" | Backend → PostgreSQL | PostgreSQL | ~10ms | **Data:**<br>• Tabelle: `notes` (id, project_id, content) |
+
+---
+
+### **⚙️ BEREICH D: SERVICE-CONFIGS (PostgreSQL + Redis Hot-Reload)**
+> **Was:** App-Einstellungen (AI-Threshold, Email-Retries, Webhooks, Feature-Flags)  
+> **Wofür:** Hot-Reload Config ohne Pod-Restart
+
+| Schritt | User-Aktion | System-Reaktion | Wo gespeichert? | Latenz | Beispiel/Details |
+|---------|-------------|-----------------|-----------------|--------|------------------|
+| **5a. AI-Threshold** | Slider: 0.75 → 0.90 | PostgreSQL + Redis PUBLISH | PostgreSQL + Redis | ~15ms | **AI Config:**<br>• DB: `service_configs` (service='ai', key='threshold', value='0.90')<br>• Redis: `PUBLISH config:ai:threshold "0.90"`<br>• Audit: `config_history` |
+| **5b. AI-Model** | Model: "gpt-4" → "gpt-4o" | PostgreSQL + Redis PUBLISH | PostgreSQL + Redis | ~15ms | **AI Model:**<br>• DB: `service_configs` (key='model', value='gpt-4o')<br>• Redis: `PUBLISH config:ai:model "gpt-4o"` |
+| **5c. Email-Retries** | Max Retries: 3 → 5 | PostgreSQL + Redis PUBLISH | PostgreSQL + Redis | ~15ms | **Email Config:**<br>• DB: `service_configs` (service='email', key='max_retries', value='5')<br>• Redis: `PUBLISH config:email:max_retries "5"` |
+| **5d. Email-Timeout** | Timeout: 30s → 60s | PostgreSQL + Redis PUBLISH | PostgreSQL + Redis | ~15ms | **Email Timeout:**<br>• DB: `service_configs` (key='timeout_seconds', value='60')<br>• Redis: `PUBLISH config:email:timeout_seconds "60"` |
+| **5e. Webhook-URL** | URL: `https://old.com` → `https://new.com` | PostgreSQL + Redis PUBLISH | PostgreSQL + Redis | ~15ms | **Webhook:**<br>• DB: `service_configs` (service='webhook', key='url')<br>• Redis: `PUBLISH config:webhook:url "..."` |
+| **5f. Rate-Limit** | Limit: ∞ → 1000 req/min | PostgreSQL + Redis PUBLISH | PostgreSQL + Redis | ~15ms | **API Limit:**<br>• DB: `service_configs` (service='api', key='rate_limit', value='1000')<br>• Redis: `PUBLISH config:api:rate_limit "1000"` |
+| **5g. Log-Level** | Level: INFO → DEBUG | PostgreSQL + Redis PUBLISH | PostgreSQL + Redis | ~15ms | **Logging:**<br>• DB: `service_configs` (service='logging', key='level', value='DEBUG')<br>• Redis: `PUBLISH config:logging:level "DEBUG"` |
+| **5h. Feature-Flag** | Feature "dark_mode": OFF → ON | PostgreSQL + Redis PUBLISH | PostgreSQL + Redis | ~15ms | **Feature:**<br>• DB: `service_configs` (service='features', key='dark_mode', value='true')<br>• Redis: `PUBLISH config:features:dark_mode "true"` |
+
+---
+
+### **🔧 BEREICH E: K8S-RESSOURCEN (PostgreSQL + etcd via K8s API)**
+> **Was:** Infrastruktur-Limits (Storage, CPU, Memory)  
+> **Wofür:** Ressourcen-Management, verhindert noisy neighbor
+
+| Schritt | User-Aktion | System-Reaktion | Wo gespeichert? | Latenz | Beispiel/Details |
+|---------|-------------|-----------------|-----------------|--------|------------------|
+| **5i. Storage-Limit** | Quota: 10GB → 50GB | PostgreSQL + K8s API | PostgreSQL + etcd | ~30ms | **Storage:**<br>• DB: `service_configs` UPDATE value='50'<br>• K8s: `kubectl patch resourcequota` (storage: 50Gi) |
+| **5j. CPU-Limit** | CPU: 10 → 20 Cores | PostgreSQL + K8s API | PostgreSQL + etcd | ~30ms | **Compute:**<br>• DB: `service_configs` UPDATE value='20'<br>• K8s: `kubectl patch resourcequota` (cpu: 20) |
+
+---
+
+### **🔥 BEREICH F: HOT-RELOAD (Redis Pub/Sub → Pod RAM)**
+> **Was:** Services empfangen Config-Updates in Echtzeit  
+> **Wofür:** Keine Pod-Restarts, <100ms Latenz
+
+| Schritt | User-Aktion | System-Reaktion | Wo gespeichert? | Latenz | Beispiel/Details |
+|---------|-------------|-----------------|-----------------|--------|------------------|
+| **6. Service empfängt** | Redis SUBSCRIBE Event | Pod Memory: neuer Wert | Pod RAM | <100ms | **Mechanismus:**<br>• Background-Thread: `SUBSCRIBE config:*`<br>• Bei Event: `self.config[key] = new_value`<br>• Kein Restart, kein Downtime |
+| **7. Nächster Request** | Nutzt neuen Wert | - | - | - | **Beispiele:**<br>• AI: `if score > self.threshold` (0.90)<br>• Email: `retry < self.max_retries` (5)<br>• API: `if rpm > self.rate_limit` → HTTP 429 |
+
+---
+
+## 🎯 Core Principles - NACH SPEICHER-BEREICHEN
+
+| Prinzip | Regel | Warum? | Beispiel | Anti-Pattern |
+|---------|-------|--------|----------|--------------|
+| **PostgreSQL = Source of Truth** | Alle Configs → DB (immer) | Audit, Backup, Migration | • `service_configs` Tabelle<br>• `config_history` (Audit-Log)<br>• pg_dump = alle Configs exportiert | ❌ Configs nur in Redis (nicht persistent)<br>❌ Configs nur in etcd (kein Audit) |
+| **Redis = Hot-Reload Channel** | Config-Änderung → PUBLISH | Echtzeit (<100ms), Multi-Pod sync | • `PUBLISH config:ai:threshold "0.90"`<br>• Alle AI-Pods empfangen gleichzeitig<br>• Kein Polling, kein Restart | ❌ DB Polling alle 5s (Delay)<br>❌ ConfigMap ändern → Pod neu starten |
+| **etcd = K8s-Ressourcen ONLY** | Nur CPU, Memory, Storage, Network | K8s-intern, nicht für Apps | • `ResourceQuota` (cpu, memory, storage)<br>• `NetworkPolicy` (deny-all)<br>• `RoleBinding` (RBAC) | ❌ App-Configs in etcd (kein Audit)<br>❌ User-Daten in etcd (1.5 MB Limit) |
+| **Separation by Type** | **App-Config** → PostgreSQL+Redis<br>**K8s-Ressourcen** → PostgreSQL+etcd | Klare Trennung | • **App:** AI-Threshold, Email-Retries<br>• **K8s:** CPU-Quota, Storage-Limit | ❌ Alles in einem System mischen |
+
+---
+
+## 📊 Visuelle Übersicht: Wo liegt was?
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  PostgreSQL (App-DB)                                        │
+│  ├─ organizations (Tenant-Metadaten)                        │
+│  ├─ projects (Business-Daten)                               │
+│  ├─ notes (User-Daten)                                      │
+│  ├─ service_configs (App-Configs + K8s-Ressourcen-Mirror)  │
+│  └─ config_history (Audit-Log: wer, wann, was)             │
+└─────────────────────────────────────────────────────────────┘
+                             ↓ (speichert + notifiziert)
+┌─────────────────────────────────────────────────────────────┐
+│  Redis (Hot-Reload Channel)                                 │
+│  └─ Channels: config:ai:*, config:email:*, config:api:*    │
+└─────────────────────────────────────────────────────────────┘
+                             ↓ (SUBSCRIBE)
+┌─────────────────────────────────────────────────────────────┐
+│  Pod RAM (Service Memory)                                   │
+│  └─ self.threshold = 0.90  (Hot-Reload <100ms)             │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│  etcd (K8s Control Plane)                                   │
+│  ├─ /registry/namespaces/org-acme                          │
+│  ├─ /registry/resourcequotas/org-acme (CPU, Memory, Storage)│
+│  ├─ /registry/networkpolicies/org-acme (deny-all)          │
+│  └─ /registry/rbac/rolebindings/org-acme (admin)           │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ---
 
