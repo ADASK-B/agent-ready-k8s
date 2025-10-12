@@ -276,3 +276,162 @@ MIT License - siehe [LICENSE](LICENSE)
 Dies ist ein AI-agent-freundliches Template. Alle Code, Docs und Commits müssen in **Englisch** sein.
 
 **Update [`.github/copilot-instructions.md`](.github/copilot-instructions.md)** bei strukturellen Änderungen!
+
+---
+
+## 🔧 FAQ: Technologie-Entscheidungen
+
+### **Warum KubernetesClient statt dotnet-etcd?**
+
+| Aspekt | `dotnet-etcd` | `KubernetesClient` |
+|--------|---------------|-------------------|
+| **Was es macht** | Spricht direkt mit etcd | Spricht mit Kubernetes API |
+| **Komplexität** | ❌ Sehr low-level, etcd-Keys selbst bauen | ✅ High-level, `CreateNamespace()` fertig |
+| **Sicherheit** | ❌ Direkter etcd-Zugriff = Risiko | ✅ K8s RBAC prüft Permissions |
+| **Portabilität** | ❌ Nur wenn etcd direkt erreichbar | ✅ Funktioniert mit jedem K8s (AKS, EKS, GKE) |
+| **Maintenance** | ❌ etcd-Struktur kann sich ändern | ✅ K8s API ist stabil (Backward-Kompatibilität) |
+
+**Empfehlung:** Nutze `KubernetesClient` (oder Äquivalent in deiner Sprache) für 99% der Fälle.
+
+---
+
+### **Ist KubernetesClient mit jeder Anwendung kompatibel?**
+
+**KURZ: JA! Jede Sprache hat einen K8s Client.**
+
+| Sprache | K8s Client Library | NuGet/npm/pip Package |
+|---------|-------------------|-----------------------|
+| **C# / .NET** | `KubernetesClient` | `KubernetesClient` |
+| **Python** | `kubernetes` | `kubernetes` |
+| **Node.js / JavaScript** | `@kubernetes/client-node` | `@kubernetes/client-node` |
+| **Go** | `client-go` | `k8s.io/client-go` |
+| **Java** | Kubernetes Java Client | `io.kubernetes:client-java` |
+| **Rust** | `kube-rs` | `kube` |
+
+**Funktioniert mit ALLEN K8s-Anbietern:**
+- ✅ kind (lokal)
+- ✅ minikube (lokal)
+- ✅ Azure AKS
+- ✅ AWS EKS
+- ✅ Google GKE
+- ✅ On-Prem kubeadm/RKE2
+- ✅ OpenShift
+
+**Warum?** Kubernetes API ist standardisiert (k8s.io/api) → funktioniert überall gleich.
+
+---
+
+### **Warum nicht NUR etcd (ohne PostgreSQL)?**
+
+**5 Gründe gegen "nur etcd":**
+
+**1. Kein SQL = Entwickler-Hölle**
+- PostgreSQL: `SELECT * FROM notes WHERE project_id = 5` → fertig
+- etcd: Alle 1000+ Keys laden, in Code filtern, sortieren → 100x mehr Code
+
+**2. Compliance unmöglich**
+- PostgreSQL: `SELECT * FROM config_history WHERE changed_at >= '2025-10-01'` → Excel-Export
+- etcd: Kein `WHERE`, kein `GROUP BY` → manuelles Filtern
+
+**3. Backup = Alles oder Nichts**
+- PostgreSQL: `pg_restore --schema=org_acme` → Nur diese Org
+- etcd: Restore = **gesamter Cluster** → alle Tenants betroffen
+
+**4. etcd ist klein gedacht**
+- **1.5 MB pro Key** → Große Dokumente unmöglich
+- **8 GB gesamte DB empfohlen** → Bei 1000 Tenants = 8 MB pro Tenant
+- PostgreSQL: TB-große Datenbanken problemlos
+
+**5. Entwickler-Ökosystem fehlt**
+- PostgreSQL: ORMs, Admin-UIs, Migrations, Cloud-Managed Services
+- etcd: Roh-API, kein ORM, keine Tools
+
+---
+
+### **Warum PostgreSQL + etcd + Redis? (Warum nicht nur eines?)**
+
+**Jedes System für seinen Zweck:**
+
+| System | Wofür? | Warum? | Beispiel |
+|--------|--------|--------|----------|
+| **etcd** | K8s-Objekte (Namespace, Quotas) | K8s liest NUR aus etcd (Millisekunden) | Namespace erstellen |
+| **PostgreSQL** | App-Daten + Audit | SQL-Queries, Backup pro Tenant, Compliance | User, Projekte, Notizen, Config-History |
+| **Redis** | Hot-Reload Notifications | Pub/Sub für Echtzeit-Updates (<100ms) | AI-Threshold ändern → Pods sofort updaten |
+
+**Warum nicht nur etcd?**
+- ❌ Kein SQL (keine komplexen Queries)
+- ❌ Kein granulares Backup (nur ganzer Cluster)
+- ❌ Nicht für App-Daten designed (1.5 MB Limit)
+
+**Warum nicht nur PostgreSQL?**
+- ❌ K8s kennt kein SQL (etcd ist K8s-intern)
+- ❌ Keine Echtzeit-Push-Notifications (Redis Pub/Sub schneller)
+
+**Warum nicht nur Redis?**
+- ❌ Nicht persistent genug (bei Crash = Daten weg)
+- ❌ Kein Audit-Log (wer änderte wann?)
+
+---
+
+### **Wie erstelle ich einen neuen Tenant auf laufender Plattform?**
+
+**User-Perspektive:**
+1. Frontend: `https://platform.example.com/register`
+2. Formular: "ACME Corp", "admin@acme.com", Passwort
+3. Button: "Create Organization"
+
+**Backend (120ms):**
+
+| Schritt | Was passiert | Technologie |
+|---------|-------------|-------------|
+| **1. API Call** | `POST /api/organizations` | Frontend → Backend |
+| **2. DB Insert** | `INSERT INTO organizations (status='PENDING')` | PostgreSQL |
+| **3. Namespace** | `kubectl create namespace org-acme` | KubernetesClient → etcd |
+| **4. Quotas** | `kubectl create resourcequota` (CPU=10, Memory=20Gi) | KubernetesClient → etcd |
+| **5. Network** | `kubectl create networkpolicy` (deny-all) | KubernetesClient → etcd |
+| **6. RBAC** | `kubectl create rolebinding` (owner=admin) | KubernetesClient → etcd |
+| **7. Gate** | `kubectl label namespace isolation-ready=true` | KubernetesClient → etcd |
+| **8. Commit** | `UPDATE organizations SET status='COMMITTED'` | PostgreSQL |
+
+**Ergebnis:** Isolierter Namespace, ready in ~120ms! ✅
+
+**Wo in README?** → Tabelle 6, Bereich A (Zeilen 1a-1d)
+
+---
+
+### **Warum PostgreSQL + Redis für Configs (nicht nur eines)?**
+
+**PostgreSQL = Source of Truth (Persistent):**
+- Config-Änderung wird **immer** in DB gespeichert
+- Audit-Log: Wer änderte wann was warum?
+- Backup/Restore: Bei Disaster → DB restore → alle Configs zurück
+
+**Redis = Hot-Reload Channel (Real-Time):**
+- PostgreSQL hat **kein Push-Notification-System**
+- Ohne Redis: Pods müssten DB pollen (alle 5s) → DB-Last + Delay
+- Mit Redis: `PUBLISH config:ai:threshold "version=5"` → alle Pods sofort (<100ms)
+
+**Warum beide?**
+- Nur PostgreSQL = Polling-Delay (0-5s), DB-Last
+- Nur Redis = Nicht persistent (Crash = Config weg), kein Audit
+- **Beide = Best-of-Both-Worlds** ✅
+
+---
+
+### **Macht Microsoft das auch so?**
+
+**JA, sehr ähnlich!**
+
+| Feature | Dein System | Azure/Microsoft |
+|---------|-------------|-----------------|
+| **Tenant-Erstellung** | PostgreSQL (Metadata) + etcd (Namespace) | Azure SQL + ARM/Fabric Controller |
+| **Hot-Reload Config** | PostgreSQL + Redis Pub/Sub | Azure App Config + Event Grid |
+| **Auth** | JWT (1h TTL) | Azure AD Access Token (1h TTL) |
+| **Backup** | pg_dump pro Tenant | Azure SQL per-database backup |
+| **Audit** | config_history Tabelle | Azure Activity Log |
+
+**Unterschied:**
+- Azure: Event Grid (HTTP Webhooks) statt Redis Pub/Sub
+- Unser System: Einfacher, keine Firewall-Config nötig, Open Source
+
+**Fazit:** Konzeptionell identisch, nur andere Namen für gleiche Patterns! ✅
