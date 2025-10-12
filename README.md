@@ -435,3 +435,103 @@ Dies ist ein AI-agent-freundliches Template. Alle Code, Docs und Commits müssen
 - Unser System: Einfacher, keine Firewall-Config nötig, Open Source
 
 **Fazit:** Konzeptionell identisch, nur andere Namen für gleiche Patterns! ✅
+
+---
+
+### **Gilt das auch für lokal (kind/minikube)?**
+
+**JA, exakt das gleiche!**
+
+| Komponente | Lokal (kind) | Cloud (AKS/EKS/GKE) | Unterschied? |
+|------------|--------------|---------------------|--------------|
+| **KubernetesClient** | ✅ Funktioniert | ✅ Funktioniert | ❌ KEIN Unterschied |
+| **PostgreSQL** | ✅ StatefulSet im Cluster | ✅ Azure Database / RDS | ⚠️ Nur Hosting, API gleich |
+| **Redis** | ✅ Deployment im Cluster | ✅ Azure Cache / ElastiCache | ⚠️ Nur Hosting, Pub/Sub gleich |
+| **etcd** | ✅ In kind eingebaut | ✅ Managed (AKS/EKS) | ❌ KEIN Unterschied (transparent) |
+| **Tenant-Erstellung** | ✅ 120ms | ✅ 120ms | ❌ KEIN Unterschied |
+| **Hot-Reload** | ✅ <100ms | ✅ <100ms | ❌ KEIN Unterschied |
+
+**Was ist identisch?**
+- ✅ Namespace erstellen: `kubectl create namespace` (gleich)
+- ✅ PostgreSQL: SQL-Queries (gleich)
+- ✅ Redis Pub/Sub: Channels (gleich)
+- ✅ KubernetesClient Code: Keine Änderung nötig (gleich)
+
+**Einziger Unterschied:**
+- Lokal: PostgreSQL + Redis im Cluster deployen (Helm Charts)
+- Cloud: PostgreSQL + Redis als Managed Service nutzen (Azure Database, Azure Cache)
+
+**Vorteil:** Entwickeln auf kind → Deployen auf AKS → **Zero Code Changes!** 🚀
+
+---
+
+### **Was muss die App mitbringen für Tenant-Erstellung?**
+
+**4 Komponenten:**
+
+#### **1. Backend API mit Kubernetes-Zugriff**
+
+**Braucht:**
+- ✅ Kubernetes Client Library (KubernetesClient für C#, kubernetes für Python, @kubernetes/client-node für Node.js)
+- ✅ ServiceAccount mit RBAC-Permissions (darf Namespaces, ResourceQuotas, NetworkPolicies erstellen)
+
+#### **2. Datenbank-Verbindung (PostgreSQL)**
+
+**Braucht:**
+- ✅ PostgreSQL-Instanz (im Cluster oder Managed Service)
+- ✅ 4 Tabellen:
+  - `organizations` (id, name, owner_email, status, operation_id)
+  - `service_configs` (org_id, service, key, value, version)
+  - `config_history` (config_id, old_value, new_value, changed_by, changed_at)
+  - `quota_changes` (org_id, cpu, memory, storage, effective_at)
+
+#### **3. Redis-Verbindung (für Hot-Reload)**
+
+**Braucht:**
+- ✅ Redis-Instanz (im Cluster oder Managed Service)
+- ✅ Pub/Sub Support (Standard-Feature)
+- ⚠️ Optional für Production: TLS + ACL
+
+#### **4. Frontend (UI für User)**
+
+**Braucht:**
+- ✅ Registrierungs-Formular (Org Name, Owner Email, Passwort)
+- ✅ API-Call: `POST /api/organizations`
+
+---
+
+### **Minimal-Setup Übersicht**
+
+| Komponente | Was installieren? | Konfiguration |
+|------------|-------------------|---------------|
+| **Backend** | FastAPI/Node.js/ASP.NET + KubernetesClient | ServiceAccount + RBAC ClusterRole |
+| **PostgreSQL** | Helm: `bitnami/postgresql` | 4 Tabellen (organizations, service_configs, config_history, quota_changes) |
+| **Redis** | Helm: `bitnami/redis` | Standard-Config (kein TLS für lokal) |
+| **Frontend** | React/Vue/Angular App | Registrierungs-Formular + API-Integration |
+
+---
+
+### **Backend RBAC-Permissions (benötigt)**
+
+Backend ServiceAccount braucht folgende Kubernetes-Rechte:
+
+| Ressource | Verben | Warum? |
+|-----------|--------|--------|
+| **namespaces** | create, get, list, patch, delete | Tenant-Namespaces verwalten |
+| **resourcequotas** | create, get, list, patch | CPU/Memory/Storage-Limits setzen |
+| **networkpolicies** | create, get, list | Netzwerk-Isolation (deny-all baseline) |
+| **rolebindings** | create, get, list | Owner → Admin-Rolle im Namespace |
+
+---
+
+### **Checkliste: Bereit für Tenant-Erstellung?**
+
+- [ ] Backend mit KubernetesClient installiert
+- [ ] Backend hat ServiceAccount + RBAC Permissions
+- [ ] PostgreSQL läuft (im Cluster oder extern)
+- [ ] PostgreSQL hat 4 Tabellen erstellt
+- [ ] Redis läuft (im Cluster oder extern)
+- [ ] Frontend kann `POST /api/organizations` aufrufen
+- [ ] Test: Backend kann Namespaces erstellen (`kubectl auth can-i create namespace`)
+
+**Alles ✅? Dann bereit für ersten Tenant!** 🚀
