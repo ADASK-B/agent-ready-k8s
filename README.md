@@ -1807,3 +1807,500 @@ Service Pod → PostgreSQL (alle 5 Sekunden)
 - Service Pods = Subscribe + Fetch (Event-Driven statt Polling)
 
 ---
+# 🎯 Ausführliche Entscheidungsmatrizen
+
+---
+
+## 📊 Wähle **etcd** (K8s-Native Config Store mit Watch API)
+
+### ✅ **PRO: Wann etcd die richtige Wahl ist**
+
+#### 🚀 **Technische Anforderungen**
+```
+✅ Real-Time Streaming ist kritisch
+   • Watch API liefert Änderungen sofort (gRPC Stream)
+   • Kein SELECT nach Event nötig
+   • Services halten Watch-Connection offen
+   • Änderungen werden <10ms nach Write gestreamt
+   
+   Beispiel: Trading-System, IoT-Config, Real-Time Dashboards
+
+✅ Config-Objekte sind klein (<1 MB)
+   • etcd hat 1.5 MB Value-Size Limit
+   • Optimiert für viele kleine Keys
+   • Typisch: Feature Flags, Thresholds, Service URLs
+   
+   ❌ NICHT für: Dokumente, Bilder, große JSON Arrays
+
+✅ Hohe Read-Last bei niedriger Write-Last
+   • Watch-Cache eliminiert DB-Hits
+   • 100.000+ Reads/s möglich (aus lokalem Cache)
+   • Writes: 10.000/s (batch writes)
+   
+   Beispiel: 1000 Services lesen gleiche Config
+
+✅ Strikte Konsistenz erforderlich
+   • Linearizable Reads (Raft Consensus)
+   • Compare-And-Swap Transaktionen
+   • Keine Eventual Consistency Probleme
+   
+   Beispiel: Leader Election, Distributed Locks
+
+✅ Key-Value Datenmodell ausreichend
+   • Keine JOINs benötigt
+   • Keine komplexen SQL Queries
+   • Hierarchische Keys: /tenant_123/service_ai/config
+   
+   ❌ NICHT für: Relationale Daten mit Foreign Keys
+```
+
+#### 🏗️ **Architektur & Infrastruktur**
+```
+✅ K8s-Native Architektur bevorzugt
+   • etcd läuft ideal in Kubernetes (StatefulSet)
+   • Helm Chart verfügbar (1-Zeile Installation)
+   • Service Discovery via K8s DNS
+   • PersistentVolumeClaims für Storage
+   
+   Deployment: helm install etcd bitnami/etcd
+
+✅ Cloud-Agnostisch (Multi-Cloud)
+   • Läuft identisch auf: AWS EKS, Azure AKS, GCP GKE
+   • Kein Vendor Lock-In
+   • Open Source (Apache 2.0)
+   • CNCF Graduated Project
+   
+   Migration: Snapshot → neuer Cluster → Restore
+
+✅ Microservices mit vielen Config-Consumers
+   • Watch-API skaliert gut bei 100+ Services
+   • Jeder Service hält 1 gRPC Connection
+   • Keine Connection Pool Probleme
+   • Event Fanout effizient
+   
+   Beispiel: 100 Services subscriben auf /global/config
+
+✅ Infrastructure-as-Code (GitOps)
+   • etcd als Config Store für Kubernetes Operators
+   • Custom Resource Definitions (CRDs) können in etcd
+   • Argo CD / Flux können etcd nutzen
+   
+   Pattern: Config in Git → Operator → etcd → Services
+```
+
+#### 👥 **Team & Skills**
+```
+✅ Team hat K8s/Cloud-Native Erfahrung
+   • Versteht StatefulSets, PVCs, Headless Services
+   • Kann etcdctl, kubectl, Prometheus bedienen
+   • Erfahrung mit gRPC, Protobuf
+   • Versteht Raft Consensus (optional, aber hilfreich)
+
+✅ Ops-Team kann zusätzlichen stateful Service betreiben
+   • Backup-Strategie: etcdctl snapshot save (täglich)
+   • Monitoring: Prometheus Metrics + Grafana Dashboards
+   • Defragmentation: CronJob für etcdctl defrag
+   • TLS Management: cert-manager Integration
+   
+   Aufwand: 4-8 Stunden/Monat (Setup + Wartung)
+
+✅ Entwickler wollen "batteries included" Hot-Reload
+   • Watch API ist einfacher als "Event + SELECT"
+   • Weniger Code: Kein Redis Client, kein DB Client
+   • Ein SDK: etcd Client Library
+   • Reconnect Logic eingebaut (mit Quirks)
+```
+
+#### 💰 **Budget & Kosten**
+```
+✅ Keine Lizenzkosten akzeptabel
+   • Open Source (kostenlos)
+   • Keine per-Core oder per-User Fees
+   • Community Support (GitHub, Slack, StackOverflow)
+   
+   vs. MSSQL: Spart $3500-14000/Jahr
+
+✅ Self-Hosted bevorzugt
+   • Managed etcd Services selten (nur etcd.io, teuer)
+   • Selbst hosten in K8s: $50-200/Monat (RAM/Storage)
+   • Volle Kontrolle über Daten
+   
+   Beispiel: 3-Node Cluster, 8 GB RAM = ~$150/Monat
+
+✅ Ops-Zeit ist verfügbar
+   • 4-8 Stunden/Monat für Wartung ok
+   • Team kann On-Call für etcd übernehmen
+   • Monitoring/Alerting Setup geplant
+```
+
+---
+
+### ❌ **CONTRA: Wann etcd NICHT die richtige Wahl ist**
+
+#### 🚨 **Dealbreaker-Szenarien**
+```
+❌ Komplexe SQL Queries benötigt
+   • Keine JOINs möglich
+   • Keine Aggregationen (SUM, AVG, GROUP BY)
+   • Keine Full-Text Search
+   • Kein Query Optimizer
+   
+   → Nutze PostgreSQL/MSSQL!
+
+❌ Große Daten (>1 MB pro Value)
+   • etcd hat 1.5 MB Hard Limit
+   • Performance degradiert bei >100 KB Values
+   • Nicht für Blobs, Dokumente, Logs
+   
+   → Nutze S3, MinIO, PostgreSQL BYTEA!
+
+❌ Audit/Compliance mit Historie erforderlich
+   • etcd speichert nur aktuelle Revision
+   • Keine eingebaute Change History
+   • Wer/Wann/Warum muss App-seitig geloggt werden
+   
+   → Nutze PostgreSQL Temporal Tables, pgAudit!
+
+❌ Team hat keine K8s Erfahrung
+   • StatefulSet Debugging schwierig
+   • etcdctl Befehle unbekannt
+   • Raft Consensus Konzepte verwirrend
+   • gRPC/Protobuf neu
+   
+   → Nutze bekannte SQL DB!
+
+❌ Ops-Team überlastet
+   • Kein Budget für zusätzlichen stateful Service
+   • Backup-Prozesse fehlen
+   • Monitoring nicht vorhanden
+   • On-Call nicht möglich
+   
+   → MSSQL/PostgreSQL "existiert ohnehin"
+
+❌ Single-Server ohne HA akzeptabel
+   • etcd ohne Quorum = höheres Risiko
+   • Bei Corruption: Restore aus Snapshot = Datenverlust
+   • Kein Auto-Failover bei Single Node
+   
+   → MSSQL/PostgreSQL hat gleiche Probleme, aber bekannter!
+```
+
+#### ⚠️ **Risiken & Herausforderungen**
+```
+⚠️ Compaction Errors im Production
+   • Watch-Clients müssen Compaction-Errors behandeln
+   • Bei Fehler: Re-List aller Keys (Performance-Hit)
+   • Code-Komplexität: Exponential Backoff, Retry Logic
+   
+   Mitigation: Regelmäßige Defragmentation, Compaction Tuning
+
+⚠️ etcd Disk Space Management
+   • BoltDB kann nicht shrink (nur via defrag)
+   • Disk Full = etcd geht in Alarm Mode (Read-Only)
+   • PVC Resize schwierig (StatefulSet Rollout)
+   
+   Mitigation: Monitoring, Alerts, Auto-Defrag CronJob
+
+⚠️ gRPC Connection Management
+   • Jeder Service = 1+ gRPC Connections zu etcd
+   • Bei 1000 Services = Hohe Connection-Last
+   • Network Glitches = Watch Reconnects
+   
+   Mitigation: Connection Pooling, Health Checks, Backoff
+
+⚠️ Debugging schwieriger als SQL
+   • Kein Query Profiler
+   • Keine EXPLAIN PLAN
+   • etcdctl ist CLI-basiert (kein GUI wie pgAdmin/SSMS)
+   
+   Mitigation: Prometheus Metrics, Grafana Dashboards, Jaeger Tracing
+
+⚠️ Migration zu/von etcd komplex
+   • Kein Standard Import/Export Format
+   • etcdctl snapshot ist binär (nicht editierbar)
+   • Schema-Änderungen = App-seitig
+   
+   Mitigation: JSON Export Scripts, Versioned Key-Schemas
+```
+
+---
+
+### 🎯 **Zusammenfassung: etcd Entscheidung**
+
+#### ✅ **Wähle etcd wenn:**
+```
+1. ✅ Real-Time Watch-Streaming ist kritisch
+2. ✅ Config-Objekte sind klein (<1 MB)
+3. ✅ K8s-Native Architektur bevorzugt
+4. ✅ Team hat K8s/Cloud-Native Skills
+5. ✅ Ops-Aufwand (4-8h/Monat) tragbar
+6. ✅ Open Source ohne Lizenzkosten
+7. ✅ Key-Value Modell ausreichend
+8. ✅ Strikte Konsistenz erforderlich
+
+UND:
+9. ❌ KEINE komplexen SQL Queries
+10. ❌ KEINE Audit-Historie benötigt
+11. ❌ KEINE großen Values (>1 MB)
+```
+
+#### ❌ **Wähle NICHT etcd wenn:**
+```
+1. ❌ SQL Features benötigt (JOINs, Aggregationen)
+2. ❌ Audit/Compliance mit Change History
+3. ❌ Team überfordert mit K8s/gRPC
+4. ❌ Ops-Team kann keinen zusätzlichen Service betreiben
+5. ❌ Große Daten (>1 MB) oder Dokumente
+6. ❌ Migration zu/von anderen Stores geplant
+```
+
+---
+
+## 📊 Wähle **MSSQL + Redis Pub/Sub**
+
+### ✅ **PRO: Wann MSSQL + Redis die richtige Wahl ist**
+
+#### 🏢 **Unternehmenskontext**
+```
+✅ MSSQL bereits produktiv und bezahlt
+   • Lizenzen vorhanden (Standard $3500 oder Enterprise $14000)
+   • DBA-Team existiert und verwaltet MSSQL
+   • Backup/Restore Prozesse etabliert
+   • Monitoring mit SSMS, Azure Monitor vorhanden
+   
+   Vorteil: Kein zusätzlicher Store → Kosten gespart!
+
+✅ Microsoft Ecosystem
+   • Windows Server Infrastruktur
+   • Active Directory Authentication
+   • Azure Cloud (Azure SQL Database)
+   • PowerShell Automation, SSIS, SSRS
+   
+   Integration: Alles aus einer Hand
+
+✅ .NET Stack
+   • C# / F# Anwendungen
+   • Entity Framework Core, Dapper
+   • ASP.NET Core Web APIs
+   • Azure Functions, Service Fabric
+   
+   Performance: Native SQL Client (System.Data.SqlClient)
+
+✅ Enterprise Support benötigt
+   • Microsoft Premier Support Vertrag
+   • 24/7 Phone Support
+   • SLAs für Patches und Hotfixes
+   • Regional Support (DACH)
+   
+   vs. Open Source: Community Support via GitHub/Slack
+```
+
+#### 💾 **Daten & Features**
+```
+✅ Komplexe SQL Queries benötigt
+   • JOINs über mehrere Tabellen
+   • Window Functions (ROW_NUMBER, LEAD, LAG)
+   • Common Table Expressions (CTEs)
+   • Stored Procedures mit Business Logic
+   
+   Beispiel:
+   SELECT t.name, AVG(c.value) OVER (PARTITION BY t.tenant_id)
+   FROM configs c JOIN tenants t ON c.tenant_id = t.id
+   WHERE t.active = 1
+
+✅ Relationale Daten mit Foreign Keys
+   • service_configs → services (FK)
+   • services → tenants (FK)
+   • tenants → organizations (FK)
+   
+   Integrität: Cascading Deletes, Constraints
+
+✅ Audit & Compliance erforderlich
+   • Temporal Tables (System-Versioned)
+     → Automatische Historie: Wer/Wann/Was
+   • SQL Server Audit
+     → DDL/DML Logging für SOC 2, DSGVO
+   • Change Data Capture (CDC)
+     → Real-Time Change Tracking
+   
+   Beispiel:
+   SELECT * FROM service_configs 
+   FOR SYSTEM_TIME AS OF '2025-10-01 12:00:00'
+
+✅ Advanced Security Features
+   • Always Encrypted (Column-Level Encryption)
+   • Transparent Data Encryption (TDE)
+   • Row-Level Security (Multi-Tenancy)
+   • Dynamic Data Masking
+   
+   Compliance: SOC 2, ISO 27001, HIPAA, PCI-DSS
+
+✅ Business Intelligence & Reporting
+   • Power BI Integration (DirectQuery)
+   • SQL Server Reporting Services (SSRS)
+   • Query Store (Performance Insights)
+   • Execution Plans für Optimierung
+   
+   Beispiel: Config-Änderungs-Dashboard in Power BI
+```
+
+#### 🔧 **Tooling & DevOps**
+```
+✅ SQL Management Studio (SSMS) bevorzugt
+   • GUI für Schema-Design, Query-Editor
+   • Visual Execution Plans
+   • Integrated Debugging (T-SQL)
+   • Import/Export Wizard
+   
+   DBA Workflow: Alles in einer Oberfläche
+
+✅ Azure Integration
+   • Azure SQL Database (Managed Service)
+   • Azure Data Studio (Cross-Platform)
+   • Azure Synapse Analytics
+   • Azure DevOps Pipelines
+   
+   Deployment: Dacpac, ARM Templates, Terraform
+
+✅ Migration Tools
+   • Data Migration Assistant (DMA)
+   • SQL Server Integration Services (SSIS)
+   • bcp (Bulk Copy Program)
+   • Azure Database Migration Service
+   
+   Beispiel: Oracle → MSSQL Migration Support
+
+✅ .NET Migrations Framework
+   • Entity Framework Migrations
+   • Fluent Migrator
+   • DbUp, Roundhouse
+   
+   Code-First: C# Modelle → Datenbank Schema
+```
+
+#### 📊 **Hot-Reload mit Redis Pub/Sub**
+```
+✅ Redis für Notifications (nicht Storage)
+   • PUBLISH config:changed "version=5"
+   • Services SUBSCRIBE config:*
+   • Redis down → Services laufen mit Cache weiter
+   • Redis ist "nice to have", nicht kritisch
+   
+   Graceful Degradation: MSSQL = Source of Truth
+
+✅ Bewährtes Pattern (wie in deinem README)
+   • Backend: UPDATE MSSQL + PUBLISH Redis
+   • Services: SUBSCRIBE Redis + SELECT MSSQL
+   • <100ms Latenz (gleich wie etcd)
+   • Version-basierte Optimistic Locking
+   
+   Code: Einfach, verständlich, wartbar
+
+✅ Redis ist leichtgewichtig
+   • In-Memory, kein Disk I/O
+   • Kein Backup nötig (nur Notifications)
+   • Helm Install: helm install redis bitnami/redis
+   • Ops-Aufwand minimal (Memory Monitoring)
+   
+   Kosten: $20-50/Monat (2-4 GB RAM)
+
+✅ Skalierung: Redis Broadcast + MSSQL Connection Pool
+   • Redis PUBLISH: 1 Event → 1000 Subscribers (<10ms)
+   • MSSQL SELECT: Connection Pool mit 50-200 Connections
+   • Read Replicas für Lastverteilung
+   
+   Bottleneck: Erst ab 1000+ Services (dann: Caching!)
+```
+
+---
+
+### ❌ **CONTRA: Wann MSSQL + Redis NICHT die richtige Wahl ist**
+
+#### 🚨 **Dealbreaker-Szenarien**
+```
+❌ Open Source bevorzugt / Lizenzkosten inakzeptabel
+   • SQL Server Standard: $3500 (2 Cores)
+   • SQL Server Enterprise: $14000 (2 Cores)
+   • Skalierung: $1750 bzw. $7000 pro 2 weitere Cores
+   
+   Alternative: PostgreSQL (kostenlos!)
+
+❌ Multi-Cloud / Cloud-Agnostisch erforderlich
+   • T-SQL ist nicht Standard SQL (Vendor Lock-In)
+   • Migration zu PostgreSQL/MySQL aufwändig
+   • Azure SQL optimal, AWS RDS/GCP eingeschränkt
+   
+   Portabilität: PostgreSQL läuft überall identisch
+
+❌ Linux-First Infrastruktur ohne Windows
+   • MSSQL auf Linux seit 2017 verfügbar
+   • ABER: Nicht alle Features (z.B. Service Broker eingeschränkt)
+   • Tooling: SSMS nur auf Windows (Azure Data Studio als Alternative)
+   
+   Native Linux: PostgreSQL seit 30 Jahren
+
+❌ Team hat keine .NET / MSSQL Erfahrung
+   • T-SQL Dialekt unterscheidet sich von ANSI SQL
+   • Stored Procedures in T-SQL (nicht Standard)
+   • DBA-Skills: Index Tuning, Execution Plans, Fragmentation
+   
+   Lernkurve: PostgreSQL SQL ist näher an Standard
+
+❌ Startup / Budget limitiert
+   • Express Edition (kostenlos): 10 GB Limit, 1 Socket
+   • Standard: $3500 + $899/Jahr Wartung
+   • Enterprise: $14000 + $2347/Jahr Wartung
+   
+   Kosten: PostgreSQL spart $5000-20000/Jahr!
+
+❌ Hohe Write-Last (>10.000 Writes/s)
+   • MSSQL Transaction Log kann Bottleneck werden
+   • Disk I/O limitiert (SSD erforderlich)
+   • In-Memory OLTP hilft, aber komplexer
+   
+   Alternative: etcd (RAM-basiert, 10k+ Writes/s)
+```
+
+#### ⚠️ **Risiken & Herausforderungen**
+```
+⚠️ Vendor Lock-In (Microsoft)
+   • T-SQL Syntax proprietär
+   • Stored Procedures nicht portierbar
+   • SSMS, SSIS nur für MSSQL
+   
+   Mitigation: Abstraction Layer (Entity Framework), Standard SQL wo möglich
+
+⚠️ Lizenz-Compliance & Audits
+   • Core-basierte Lizenzierung komplex
+   • Virtualisierung: 4-Core Minimum pro VM
+   • Cloud: Pay-per-vCore (teuer bei Skalierung)
+   
+   Mitigation: Lizenz-Berater, Azure SQL (managed licensing)
+
+⚠️ Redis Pub/Sub Eventual Consistency
+   • PUBLISH kann vor DB COMMIT ankommen
+   • Services können veraltete Daten lesen
+   • Lösung: Version-Check + Retry
+   
+   Mitigation: Optimistic Locking, Reconcile Loop
+
+⚠️ Connection Pool Management
+   • Bei 1000 Services: 1000x SELECT gleichzeitig
+   • MSSQL Connection Limit: Default 32767, praktisch ~5000
+   • Connection Pool Exhaustion möglich
+   
+   Mitigation: Read Replicas, Caching Layer, Rate Limiting
+
+⚠️ Windows Server Lizenzkosten (On-Prem)
+   • Windows Server Standard: $1000-2000
+   • Datacenter Edition: $6000+
+   • Client Access Licenses (CALs)
+   
+   Alternative: MSSQL on Linux, Azure SQL (keine Windows Server Kosten)
+
+⚠️ Backup-Größe bei großen Datenbanken
+   • Full Backup: Stunden bei TB-Datenbanken
+   • Transaction Log: Wächst schnell (Purge Policy!)
+   • Restore: Langsam (nicht wie etcd Snapshot in Sekunden)
+   
+   
