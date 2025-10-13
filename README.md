@@ -1042,4 +1042,130 @@ Frontend (React/Vue):
 
 ---
 
+## 🏗️ Hierarchie: Tenant → Organization → Project → Daten
+
 ```
+┌─────────────────────────────────────────────────────────────────┐
+│  ☁️  KUBERNETES CLUSTER (= Azure Tenant)                        │
+│  "Die ganze Plattform"                                          │
+└─────────────────────────────────────────────────────────────────┘
+                            │
+        ┌───────────────────┼───────────────────┐
+        ▼                   ▼                   ▼
+┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐
+│ 🏢 ORG: ACME     │ │ 🏢 ORG: Contoso  │ │ 🏢 ORG: Fabrikam │
+│ (Namespace)      │ │ (Namespace)      │ │ (Namespace)      │
+│ org_id=1         │ │ org_id=2         │ │ org_id=3         │
+└──────────────────┘ └──────────────────┘ └──────────────────┘
+        │                   │                   │
+        │                   │                   │
+        ▼                   ▼                   ▼
+┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐
+│ 💾 PostgreSQL    │ │ 💾 PostgreSQL    │ │ 💾 PostgreSQL    │
+│ (ACME-Daten)     │ │ (Contoso-Daten)  │ │ (Fabrikam-Daten) │
+└──────────────────┘ └──────────────────┘ └──────────────────┘
+        │                   │                   │
+        ▼                   ▼                   ▼
+┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐
+│ 📁 4 Projects    │ │ 📁 3 Projects    │ │ 📁 5 Projects    │
+│ - HR             │ │ - DevOps         │ │ - Logistics      │
+│ - Finance        │ │ - Cloud          │ │ - Warehouse      │
+│ - Marketing      │ │ - Security       │ │ - Shipping       │
+│ - Sales          │ │                  │ │ - Tracking       │
+│                  │ │                  │ │ - Billing        │
+└──────────────────┘ └──────────────────┘ └──────────────────┘
+
+⚠️ Komplett isoliert! ACME sieht NICHTS von Contoso!
+✅ Netzwerk-Isolation via NetworkPolicies
+✅ Daten-Isolation via separate PostgreSQL-Instanzen
+```
+
+---
+
+## 📊 Ebenen-Übersicht: Was ist wo?
+
+| Ebene | Was ist das? | Wo gespeichert? | Anzahl | Isolation | Beispiel |
+|-------|--------------|-----------------|--------|-----------|----------|
+| **1. Tenant (Cluster)** | Die ganze Plattform | Kubernetes Cluster | **1** | - | `cluster-prod` |
+| **2. Organization** | Eine Firma/Kunde | Kubernetes Namespace | **3-100** | ✅ Namespace-Ebene | `org-acme`, `org-contoso` |
+| **3. Project** | Team/Abteilung | PostgreSQL Zeile | **5-50 pro Org** | ⚠️ DB-Ebene (optional RLS) | `HR-Portal`, `Finance-System` |
+| **4. Notes/Daten** | Eigentliche Daten | PostgreSQL Zeile | **1000+ pro Project** | ⚠️ Foreign Key | `"Meeting Notes"` |
+
+---
+
+## 🎯 Eine Organization mit vielen Projects (OHNE User-Management)
+
+```
+┌─────────────────────────────────────────────────────┐
+│  Frontend (1 React-App)                             │
+│  https://platform.acme-corp.com                     │
+└─────────────────────────────────────────────────────┘
+                       │ KEIN Token nötig!
+                       │ (oder nur org_id im Cookie)
+                       ▼
+┌─────────────────────────────────────────────────────┐
+│  Backend (1 API-Deployment)                         │
+│  Pods in Namespace "org-acme"                       │
+└─────────────────────────────────────────────────────┘
+                       │ KEINE User-Prüfung!
+                       │ Nur org_id filtern
+                       ▼
+┌─────────────────────────────────────────────────────┐
+│  PostgreSQL (1 Datenbank)                           │
+│  ├─ Alle Projekte (HR, Finance, Marketing, Sales)  │
+│  ├─ Row-Level Security (RLS) DEAKTIVIERT           │
+│  └─ SELECT * FROM projects WHERE org_id = 1        │
+└─────────────────────────────────────────────────────┘
+                       │
+                       ├─ Frontend sieht: Projekt 1 (HR)
+                       ├─ Frontend sieht: Projekt 2 (Finance)
+                       ├─ Frontend sieht: Projekt 3 (Marketing)
+                       └─ Frontend sieht: Projekt 4 (Sales)
+                       
+                       ⚠️ JEDER sieht ALLE Projekte!
+                       ✅ OK für MVP/Demo!
+```
+
+---
+
+## 🎯 Eine Organization mit vielen Projects (MIT User-Management)
+
+```
+┌─────────────────────────────────────────────────────┐
+│  Frontend (1 React-App)                             │
+│  https://platform.acme-corp.com                     │
+└─────────────────────────────────────────────────────┘
+                       │ JWT Token (user_id)
+                       ▼
+┌─────────────────────────────────────────────────────┐
+│  Backend (1 API-Deployment)                         │
+│  Pods in Namespace "org-acme"                       │
+└─────────────────────────────────────────────────────┘
+                       │ SET app.current_user_id
+                       ▼
+┌─────────────────────────────────────────────────────┐
+│  PostgreSQL (1 Datenbank)                           │
+│  ├─ Alle Projekte (HR, Finance, Marketing, Sales)  │
+│  ├─ Row-Level Security (RLS) aktiv                 │
+│  └─ Filtert automatisch nach Berechtigung          │
+└─────────────────────────────────────────────────────┘
+                       │
+                       ├─ User 5 (HR) → sieht Projekt 1
+                       ├─ User 12 (Finance) → sieht Projekt 2
+                       ├─ User 20 (Marketing) → sieht Projekt 3
+                       └─ User 25 (Sales) → sieht Projekt 4
+                       
+                       ✅ Jeder sieht NUR seine Projekte!
+                       ✅ Production-Ready!
+```
+
+---
+
+## 🔑 Vergleich: Azure DevOps vs. Dein System
+
+| Ebene | Azure DevOps | Dein K8s-System | Speicherort |
+|-------|--------------|-----------------|-------------|
+| **Tenant** | Azure AD Tenant<br>`acme-corp.onmicrosoft.com` | Kubernetes Cluster<br>`cluster-prod` | K8s Control Plane |
+| **Organization** | DevOps Organization<br>`dev.azure.com/acme-corp` | Kubernetes Namespace<br>`org-acme` | etcd (Namespace) |
+| **Project** | DevOps Project<br>`Website`, `Mobile App` | PostgreSQL Zeile<br>`HR-Portal`, `Finance-System` | PostgreSQL (Zeile) |
+| **Berechtigung** | Project Permissions<br>(User → Project Mapping) | Row-Level Security (RLS)<br>(user_id → project_id) | PostgreSQL (project_members) |
