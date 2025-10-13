@@ -1642,3 +1642,168 @@ User öffnet: https://platform.acme-corp.com
 **Empfehlung:** Start mit Shared, upgrade zu Dedicated nur für zahlende Enterprise-Kunden! ✅
 
 ---
+
+## 🔄 Hot-Reload: Services empfangen Einstellungen sofort (ohne Polling)
+
+### Problem ohne Hot-Reload
+Services müssten regelmäßig die Datenbank abfragen (Polling):
+```
+Service Pod → PostgreSQL (alle 5 Sekunden)
+  ↓ "Hat sich was geändert?"
+  ↓ "Nein... warte 5 Sekunden"
+  ↓ "Hat sich was geändert?"
+  ↓ "Ja! Version 5 ist da"
+```
+⚠️ **Problem:** 5 Sekunden Verzögerung + unnötige Datenbank-Last!
+
+---
+
+### Lösung mit Redis Pub/Sub (Hot-Reload)
+
+**Ablauf bei Änderung:**
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  🎯 User ändert AI-Threshold von 70 auf 80 im Frontend                 │
+└─────────────────────────────────────────────────────────────────────────┘
+                           ↓
+                    ⏱️  0ms: PUT /api/settings
+                           ↓
+┌─────────────────────────────────────────────────────────────────────────┐
+│  🖥️  Backend (macht 2 Dinge gleichzeitig)                              │
+├─────────────────────────────────────────────────────────────────────────┤
+│  1️⃣  UPDATE service_configs SET value = 80, version = 5               │
+│      WHERE key = 'ai_threshold'                                         │
+│                                                                           │
+│  2️⃣  PUBLISH config:ai:threshold "version=5"                           │
+└─────────────────────────────────────────────────────────────────────────┘
+         ↓ (10ms)                                      ↓ (15ms)
+    PostgreSQL                                    Redis Pub/Sub
+         ↓                                              ↓
+┌──────────────────┐                      ┌────────────────────────────┐
+│  💾 PostgreSQL   │                      │  📢 Redis Pub/Sub          │
+├──────────────────┤                      ├────────────────────────────┤
+│  service_configs │                      │  Channel: config:*         │
+│  ├─ key          │                      │  Message: "version=5"      │
+│  ├─ value = 80   │                      │                            │
+│  └─ version = 5  │                      │  ⚡ Broadcasts to all      │
+└──────────────────┘                      │     subscribed pods        │
+                                          └────────────────────────────┘
+                                                       ↓ (20ms)
+                          ┌────────────────────────────┼────────────────────────┐
+                          ↓                            ↓                        ↓
+              ┌───────────────────┐      ┌───────────────────┐    ┌───────────────────┐
+              │  🚀 Service Pod 1 │      │  🚀 Service Pod 2 │    │  🚀 Service Pod 3 │
+              ├───────────────────┤      ├───────────────────┤    ├───────────────────┤
+              │  SUBSCRIBE        │      │  SUBSCRIBE        │    │  SUBSCRIBE        │
+              │  config:*         │      │  config:*         │    │  config:*         │
+              │                   │      │                   │    │                   │
+              │  ✅ Event erhalten│      │  ✅ Event erhalten│    │  ✅ Event erhalten│
+              │  "version=5"      │      │  "version=5"      │    │  "version=5"      │
+              │                   │      │                   │    │                   │
+              │  ⚙️ Prüfung:      │      │  ⚙️ Prüfung:      │    │  ⚙️ Prüfung:      │
+              │  Local version=4  │      │  Local version=4  │    │  Local version=4  │
+              │  → Neu = 5 → Load │      │  → Neu = 5 → Load │    │  → Neu = 5 → Load │
+              │                   │      │                   │    │                   │
+              │  📥 SELECT value  │      │  📥 SELECT value  │    │  📥 SELECT value  │
+              │  FROM PostgreSQL  │      │  FROM PostgreSQL  │    │  FROM PostgreSQL  │
+              │  → value = 80     │      │  → value = 80     │    │  → value = 80     │
+              │                   │      │                   │    │                   │
+              │  🔄 Update config │      │  🔄 Update config │    │  🔄 Update config │
+              │  in-memory        │      │  in-memory        │    │  in-memory        │
+              └───────────────────┘      └───────────────────┘    └───────────────────┘
+                      ↓ (50ms)                   ↓ (50ms)                 ↓ (50ms)
+              ┌───────────────────┐      ┌───────────────────┐    ┌───────────────────┐
+              │  ✅ threshold=80  │      │  ✅ threshold=80  │    │  ✅ threshold=80  │
+              │  ✅ version=5     │      │  ✅ version=5     │    │  ✅ version=5     │
+              └───────────────────┘      └───────────────────┘    └───────────────────┘
+```
+
+---
+
+### Timeline: Wie schnell ist Hot-Reload?
+
+```
+⏱️  0ms   → User klickt "Save" im Frontend
+    ↓
+⏱️  10ms  → Backend schreibt in PostgreSQL (UPDATE service_configs)
+    ↓
+⏱️  15ms  → Backend published Event zu Redis (PUBLISH config:ai:threshold)
+    ↓
+⏱️  20ms  → Alle 3 Service Pods empfangen Event gleichzeitig
+    ↓         (Redis Pub/Sub = Broadcast, keine Wartezeit!)
+    ↓
+⏱️  30ms  → Pods prüfen lokale Version (4) vs. neue Version (5)
+    ↓         → Version ist neu → Config muss geladen werden
+    ↓
+⏱️  40ms  → Pods fetchen neuen Wert aus PostgreSQL (SELECT value)
+    ↓         (3 SELECTs parallel, jeweils ~10ms)
+    ↓
+⏱️  50ms  → Alle Pods haben neue Config in-memory aktualisiert
+            ✅ AI-Threshold ist jetzt 80 in ALLEN Pods!
+```
+
+**🎯 Ergebnis:** Änderungen sind in **unter 100ms** in allen Pods aktiv!
+
+---
+
+### Vergleich: Mit vs. Ohne Redis Pub/Sub
+
+| **Aspekt** | **❌ Ohne Redis (Polling)** | **✅ Mit Redis Pub/Sub (Hot-Reload)** |
+|------------|----------------------------|---------------------------------------|
+| **Latenz** | 5-60 Sekunden (abhängig von Polling-Intervall) | <100ms (sofort) |
+| **Datenbank-Last** | Konstante Last (jeder Pod pollt alle X Sekunden) | Nur bei Änderungen (1x UPDATE + 3x SELECT) |
+| **Synchronität** | Pods aktualisieren zu unterschiedlichen Zeiten | Alle Pods aktualisieren gleichzeitig |
+| **Skalierbarkeit** | Schlechter (100 Pods = 100 Polling-Queries alle 5s) | Besser (Redis Broadcast = 1 Event für alle) |
+| **Komplexität** | Einfacher (nur DB-Queries) | Mittlere Komplexität (Redis + DB) |
+
+---
+
+### Code-Beispiel: Service Pod empfängt Hot-Reload
+
+
+### Warum PostgreSQL + Redis (und nicht nur Redis)?
+
+| **Komponente** | **Rolle** | **Warum?** |
+|----------------|-----------|-----------|
+| **PostgreSQL** | 💾 **Source of Truth** | Persistent, ACID, SQL-Queries, Backup/Restore |
+| **Redis Pub/Sub** | 📢 **Event-Channel** | Ultra-schnell (<1ms), Broadcast, In-Memory |
+
+**Wenn nur Redis:**
+- ❌ Daten gehen bei Redis-Restart verloren
+- ❌ Kein Audit-Log (wer hat wann was geändert?)
+- ❌ Keine SQL-Queries möglich
+
+**Wenn nur PostgreSQL:**
+- ❌ Services müssen pollen (5-60s Latenz)
+- ❌ Hohe Datenbank-Last durch konstante Queries
+- ❌ Pods aktualisieren asynchron (inkonsistenter State)
+
+**Kombination PostgreSQL + Redis:**
+- ✅ PostgreSQL = Persistent Storage + SQL
+- ✅ Redis Pub/Sub = Real-Time Notifications
+- ✅ Beste aus beiden Welten!
+
+---
+
+### Zusammenfassung
+
+**🎯 Hot-Reload mit Redis Pub/Sub bedeutet:**
+
+1. **Backend** schreibt Änderung in **PostgreSQL** (Source of Truth)
+2. **Backend** published Event zu **Redis Pub/Sub** (Notification Channel)
+3. **Alle Service Pods** empfangen Event **gleichzeitig** via SUBSCRIBE
+4. **Pods** fetchen neue Config aus **PostgreSQL** (nur bei neuer Version)
+5. **Pods** aktualisieren In-Memory Config → **kein Pod-Restart nötig!**
+
+**📊 Performance:**
+- ⏱️ **<100ms** von User-Klick bis Config in allen Pods aktiv
+- 🚀 **Broadcast:** Ein Event erreicht alle Pods gleichzeitig
+- 💾 **Keine DB-Polling:** Nur bei echten Änderungen werden Queries ausgeführt
+
+**🔐 Best Practice:**
+- PostgreSQL = Persistent Storage (Backups, Audit-Log, SQL)
+- Redis Pub/Sub = Real-Time Notifications (schnell, skalierbar)
+- Service Pods = Subscribe + Fetch (Event-Driven statt Polling)
+
+---
