@@ -123,31 +123,24 @@ else
   log_fail "Redis pod not found"
 fi
 
-# Test PostgreSQL connection
+# Test PostgreSQL connection (using exec instead of run to avoid image pull)
 log_test "PostgreSQL Connection"
-pg_test=$(kubectl run postgresql-test-$$  -n demo-platform \
-  --rm --attach --restart=Never \
-  --image=docker.io/bitnami/postgresql:17 \
-  --env PGPASSWORD=demopass \
-  --command -- psql --host postgresql.demo-platform -U demouser -d demodb -c 'SELECT 1;' 2>&1 || true)
+pg_test=$(kubectl exec -n demo-platform postgresql-0 -- env PGPASSWORD=demopass psql -U demouser -d demodb -c 'SELECT 1;' 2>&1 || true)
 
 if echo "$pg_test" | grep -q "1 row"; then
   log_pass "PostgreSQL connection successful"
 else
-  log_fail "PostgreSQL connection failed"
+  log_fail "PostgreSQL connection failed (using exec in existing pod)"
 fi
 
-# Test Redis connection
+# Test Redis connection (using exec instead of run to avoid image pull)
 log_test "Redis Connection"
-redis_test=$(kubectl run redis-test-$$ -n demo-platform \
-  --rm --attach --restart=Never \
-  --image=docker.io/bitnami/redis:7.4 \
-  --command -- redis-cli -h redis-master.demo-platform -a redispass ping 2>&1 || true)
+redis_test=$(kubectl exec -n demo-platform redis-master-0 -- redis-cli -a redispass ping 2>&1 || true)
 
 if echo "$redis_test" | grep -q "PONG"; then
   log_pass "Redis connection successful"
 else
-  log_fail "Redis connection failed"
+  log_fail "Redis connection failed (using exec in existing pod)"
 fi
 
 echo ""
