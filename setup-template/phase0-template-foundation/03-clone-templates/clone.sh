@@ -127,18 +127,6 @@ spec:
 PATCH_EOF
 
 log_success "Created tenant manifests"
-fi
-
-# Cleanup
-rm -rf "$TEMP_DIR"
-        memory: 256Mi
-      requests:
-        cpu: 100m
-        memory: 64Mi
-PATCH_EOF
-
-  log_success "Created tenant manifests in apps/podinfo/tenants/demo/"
-fi
 
 # Cleanup
 log_info "Cleaning up temporary clone..."
