@@ -153,9 +153,12 @@ fi
 
 # Test HTTP endpoint (with retry for ingress propagation)
 log_test "HTTP Endpoint (http://demo.localhost)"
-if command -v curl >/dev/null 2>&1; then
+if ! grep -q "demo.localhost" /etc/hosts 2>/dev/null; then
+  log_fail "demo.localhost not in /etc/hosts (run: sudo bash -c 'echo \"127.0.0.1 demo.localhost\" >> /etc/hosts')"
+elif command -v curl >/dev/null 2>&1; then
   max_retries=5
   retry=0
+  success=false
   while [ $retry -lt $max_retries ]; do
     http_response=$(curl -s -o /dev/null -w "%{http_code}" http://demo.localhost --max-time 5 || echo "000")
     if [ "$http_response" = "200" ]; then
@@ -168,14 +171,17 @@ if command -v curl >/dev/null 2>&1; then
       else
         log_fail "Response does not contain 'podinfo'"
       fi
+      success=true
       break
-    elif [ $retry -lt $((max_retries - 1)) ]; then
+    fi
+    ((retry++))
+    if [ $retry -lt $max_retries ]; then
       sleep 3
-      ((retry++))
-    else
-      log_fail "http://demo.localhost returns HTTP $http_response (expected: 200)"
     fi
   done
+  if [ "$success" = "false" ]; then
+    log_fail "http://demo.localhost returns HTTP $http_response (waited ${max_retries} attempts)"
+  fi
 else
   log_fail "curl not installed (cannot test HTTP endpoint)"
 fi

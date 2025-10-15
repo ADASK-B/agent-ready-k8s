@@ -140,25 +140,30 @@ else
   log_fail "Admin password not found"
 fi
 
-# Test HTTP endpoint
+# Test HTTP endpoint (skip if /etc/hosts not configured)
 log_test "HTTP Endpoint (http://argocd.local)"
-if command -v curl >/dev/null 2>&1; then
+if ! grep -q "argocd.local" /etc/hosts 2>/dev/null; then
+  log_fail "argocd.local not in /etc/hosts (run: sudo bash -c 'echo \"127.0.0.1 argocd.local\" >> /etc/hosts')"
+elif command -v curl >/dev/null 2>&1; then
   max_retries=3
   retry=0
+  success=false
   while [ $retry -lt $max_retries ]; do
     http_response=$(curl -s -o /dev/null -w "%{http_code}" http://argocd.local --max-time 10 || echo "000")
     # Argo CD returns 200 or 301/302 (redirect to /applications)
     if [ "$http_response" = "200" ] || [ "$http_response" = "301" ] || [ "$http_response" = "302" ]; then
       log_pass "http://argocd.local returns HTTP $http_response"
+      success=true
       break
-    elif [ $retry -lt $((max_retries - 1)) ]; then
+    fi
+    ((retry++))
+    if [ $retry -lt $max_retries ]; then
       sleep 3
-      ((retry++))
-    else
-      log_fail "http://argocd.local returns HTTP $http_response"
-      log_fail "Add to /etc/hosts: 127.0.0.1 argocd.local"
     fi
   done
+  if [ "$success" = "false" ]; then
+    log_fail "http://argocd.local returns HTTP $http_response (waited ${max_retries} attempts)"
+  fi
 else
   log_fail "curl not installed (cannot test HTTP endpoint)"
 fi
