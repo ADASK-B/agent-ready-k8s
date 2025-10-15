@@ -67,16 +67,32 @@ else
   exit 1
 fi
 
-# Test pods
+# Test pods with wait loop
 log_test "Argo CD Pods"
-pods=$(kubectl get pods -n argocd --no-headers 2>/dev/null)
-running_pods=$(echo "$pods" | grep "Running" | wc -l)
-total_pods=$(echo "$pods" | wc -l)
 
-if [ "$running_pods" -eq "$total_pods" ] && [ "$total_pods" -gt 0 ]; then
+# Wait up to 3 minutes for all pods to be Running
+max_wait=180
+waited=0
+all_running=false
+
+while [ $waited -lt $max_wait ]; do
+  pods=$(kubectl get pods -n argocd --no-headers 2>/dev/null)
+  running_pods=$(echo "$pods" | grep "Running" | wc -l)
+  total_pods=$(echo "$pods" | wc -l)
+  
+  if [ "$running_pods" -eq "$total_pods" ] && [ "$total_pods" -gt 0 ]; then
+    all_running=true
+    break
+  fi
+  
+  sleep 5
+  waited=$((waited + 5))
+done
+
+if [ "$all_running" = "true" ]; then
   log_pass "All Argo CD pods Running ($running_pods/$total_pods)"
 else
-  log_fail "Some pods not Running ($running_pods/$total_pods)"
+  log_fail "Some pods not Running ($running_pods/$total_pods) after ${waited}s"
 fi
 
 # Check specific components
