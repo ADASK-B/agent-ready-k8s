@@ -157,10 +157,10 @@ else
   log_fail "Admin password not found"
 fi
 
-# Test HTTP endpoint (skip if /etc/hosts not configured)
+# Test HTTP endpoint
 log_test "HTTP Endpoint (http://argocd.local)"
 if ! grep -q "argocd.local" /etc/hosts 2>/dev/null; then
-  echo -e "${YELLOW}  ⚠ Skipped: argocd.local not in /etc/hosts (add after setup)${RESET}"
+  log_fail "argocd.local not in /etc/hosts (should have been added by deploy script)"
 elif command -v curl >/dev/null 2>&1; then
   max_retries=3
   retry=0

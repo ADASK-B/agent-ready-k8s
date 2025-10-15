@@ -161,13 +161,28 @@ echo "  URL:      http://argocd.local"
 echo "  Username: admin"
 echo "  Password: ${ARGOCD_PASSWORD}"
 echo ""
-echo -e "${YELLOW}⚠️  Important:${RESET}"
-echo "  Add to /etc/hosts: 127.0.0.1 argocd.local"
-echo "  Command: sudo bash -c 'echo \"127.0.0.1 argocd.local\" >> /etc/hosts'"
+
+# Configure /etc/hosts
+echo -e "${YELLOW}⚠️  Configuring /etc/hosts for argocd.local...${RESET}"
+if ! grep -q "argocd.local" /etc/hosts 2>/dev/null; then
+  echo ""
+  echo "  ℹ️  This requires sudo access to modify /etc/hosts"
+  echo "  ℹ️  Adding: 127.0.0.1 argocd.local"
+  echo ""
+  
+  if sudo bash -c 'echo "127.0.0.1 argocd.local" >> /etc/hosts'; then
+    echo -e "${GREEN}✓ Added argocd.local to /etc/hosts${RESET}"
+  else
+    echo -e "${RED}✗ Failed to add argocd.local to /etc/hosts${RESET}"
+    echo "  You can add it manually: sudo bash -c 'echo \"127.0.0.1 argocd.local\" >> /etc/hosts'"
+  fi
+else
+  echo -e "${GREEN}✓ argocd.local already in /etc/hosts${RESET}"
+fi
 echo ""
+
 echo -e "${CYAN}📝 Next Steps:${RESET}"
-echo "  1. Add argocd.local to /etc/hosts"
-echo "  2. Open http://argocd.local in browser"
-echo "  3. Login with admin / ${ARGOCD_PASSWORD}"
-echo "  4. Test: ./setup-template/phase0-template-foundation/07-deploy-argocd/test.sh"
+echo "  1. Open http://argocd.local in browser"
+echo "  2. Login with admin / ${ARGOCD_PASSWORD}"
+echo "  3. Test: ./setup-template/phase0-template-foundation/07-deploy-argocd/test.sh"
 echo ""

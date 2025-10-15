@@ -119,6 +119,26 @@ echo -e "${GREEN}╔════════════════════
 echo -e "${GREEN}║  ✅ podinfo Deployed!                                 ║${RESET}"
 echo -e "${GREEN}╚════════════════════════════════════════════════════════╝${RESET}"
 echo ""
+
+# Configure /etc/hosts
+echo -e "${YELLOW}⚠️  Configuring /etc/hosts for demo.localhost...${RESET}"
+if ! grep -q "demo.localhost" /etc/hosts 2>/dev/null; then
+  echo ""
+  echo "  ℹ️  This requires sudo access to modify /etc/hosts"
+  echo "  ℹ️  Adding: 127.0.0.1 demo.localhost"
+  echo ""
+  
+  if sudo bash -c 'echo "127.0.0.1 demo.localhost" >> /etc/hosts'; then
+    echo -e "${GREEN}✓ Added demo.localhost to /etc/hosts${RESET}"
+  else
+    echo -e "${RED}✗ Failed to add demo.localhost to /etc/hosts${RESET}"
+    echo "  You can add it manually: sudo bash -c 'echo \"127.0.0.1 demo.localhost\" >> /etc/hosts'"
+  fi
+else
+  echo -e "${GREEN}✓ demo.localhost already in /etc/hosts${RESET}"
+fi
+echo ""
+
 echo -e "${CYAN}📝 Next Steps:${RESET}"
 echo "  Test: ./setup-template/phase0-template-foundation/08-deploy-podinfo/test.sh"
 echo ""

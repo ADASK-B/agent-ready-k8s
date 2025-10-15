@@ -155,7 +155,7 @@ fi
 # Test HTTP endpoint (with retry for ingress propagation)
 log_test "HTTP Endpoint (http://demo.localhost)"
 if ! grep -q "demo.localhost" /etc/hosts 2>/dev/null; then
-  echo -e "${YELLOW}  ⚠ Skipped: demo.localhost not in /etc/hosts (add after setup)${RESET}"
+  log_fail "demo.localhost not in /etc/hosts (should have been added by deploy script)"
 elif command -v curl >/dev/null 2>&1; then
   max_retries=5
   retry=0
