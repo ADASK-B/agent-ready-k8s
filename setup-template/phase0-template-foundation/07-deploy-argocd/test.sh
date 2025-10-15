@@ -143,7 +143,7 @@ fi
 # Test HTTP endpoint (skip if /etc/hosts not configured)
 log_test "HTTP Endpoint (http://argocd.local)"
 if ! grep -q "argocd.local" /etc/hosts 2>/dev/null; then
-  log_fail "argocd.local not in /etc/hosts (run: sudo bash -c 'echo \"127.0.0.1 argocd.local\" >> /etc/hosts')"
+  echo -e "${YELLOW}  ⚠ Skipped: argocd.local not in /etc/hosts (add after setup)${RESET}"
 elif command -v curl >/dev/null 2>&1; then
   max_retries=3
   retry=0
