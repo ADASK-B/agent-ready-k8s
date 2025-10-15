@@ -9,7 +9,9 @@
 # Actions:
 #   - Creates argocd namespace
 #   - Installs Argo CD v2.12.3
+#   - Enables insecure mode for HTTP access
 #   - Creates Ingress for argocd.local
+#   - Configures /etc/hosts entry
 #   - Retrieves admin password
 #   - Waits for all components to be ready
 #
@@ -100,6 +102,11 @@ log_info "Configuring Argo CD server for Ingress..."
 kubectl patch svc argocd-server -n argocd -p '{"spec": {"type": "ClusterIP"}}'
 log_success "Service patched"
 
+# Enable insecure mode for HTTP access
+log_info "Enabling Argo CD insecure mode for HTTP..."
+kubectl set env deployment/argocd-server -n argocd ARGOCD_SERVER_INSECURE=true
+log_success "Insecure mode enabled"
+
 # Create Ingress
 log_info "Creating Ingress for argocd.local..."
 cat <<EOF | kubectl apply -f -
@@ -110,7 +117,8 @@ metadata:
   namespace: argocd
   annotations:
     nginx.ingress.kubernetes.io/ssl-redirect: "false"
-    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/ssl-passthrough: "false"
 spec:
   ingressClassName: nginx
   rules:
@@ -123,7 +131,7 @@ spec:
           service:
             name: argocd-server
             port:
-              number: 443
+              number: 80
 EOF
 log_success "Ingress created"
 
