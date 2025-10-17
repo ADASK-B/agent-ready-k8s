@@ -1,13 +1,8 @@
 # Third-Party Licenses & Attributions
 
-This project uses code and patterns from the following open-source projects:
+This project uses code from the following open-source projects that **require attribution**:
 
-## FluxCD flux2-kustomize-helm-example
-- **Source:** https://github.com/fluxcd/flux2-kustomize-helm-example
-- **License:** Apache-2.0
-- **Copyright:** Cloud Native Computing Foundation (CNCF)
-- **Usage:** Repository structure, GitOps patterns, Kustomize layouts
-- **Changes:** Adapted for local development with kind, simplified structure
+---
 
 ## podinfo (Demo Application)
 - **Source:** https://github.com/stefanprodan/podinfo
@@ -16,29 +11,46 @@ This project uses code and patterns from the following open-source projects:
 - **Usage:** Demo workload for testing Kubernetes deployments, Helm charts
 - **Changes:** Custom Ingress configuration, tenant overlays
 
-## AKS Baseline Automation (Phase 2 - Future)
-- **Source:** https://github.com/Azure/aks-baseline-automation
-- **License:** MIT
-- **Copyright:** Microsoft Corporation
-- **Usage:** Azure Kubernetes Service best practices (Phase 2 only)
-- **Changes:** Will be integrated in Phase 2 for AKS deployment
+**Apache-2.0 License Notice:**
+```
+Copyright Stefan Prodan
 
-## helm/kind-action (Phase 2 - Future)
-- **Source:** https://github.com/helm/kind-action
-- **License:** Apache-2.0
-- **Copyright:** The Helm Authors
-- **Usage:** CI/CD testing with ephemeral kind clusters (Phase 2 only)
-- **Changes:** Will be used in GitHub Actions workflows
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+See: http://www.apache.org/licenses/LICENSE-2.0
+```
 
 ---
 
 ## License Compliance
 
-All third-party components retain their original licenses as listed above.
+# Third-Party Licenses
 
-**This project (agent-ready-k8s-stack) is licensed under MIT.**
+This project incorporates code from the following open source projects:
 
-See [LICENSE](LICENSE) for the main project license.
+---
+
+## agent-ready-k8s
+
+**Copyright:** 2025 Arthur Schwan
+**License:** Apache License 2.0
+
+### Required Attribution
+
+When using this project, you **MUST** include the following attribution:
+
+```
+Based on agent-ready-k8s by Arthur (https://github.com/ADASK-B/agent-ready-k8s)
+Licensed under the Apache License, Version 2.0
+```
+
+**In derivative works, you must:**
+1. ✅ Credit the original author (Arthur / ADASK-B)
+2. ✅ Link to this repository
+3. ✅ Include the Apache License 2.0 text (see [LICENSE](LICENSE))
+4. ✅ Include the NOTICE file
+5. ✅ Document your changes (state modifications)
+6. ✅ Preserve all third-party attributions listed above
 
 ---
 
@@ -46,11 +58,11 @@ See [LICENSE](LICENSE) for the main project license.
 
 Where applicable, source files contain header comments with attribution:
 ```yaml
-# Based on: https://github.com/fluxcd/flux2-kustomize-helm-example
+# Based on: podinfo by Stefan Prodan
+# Source: https://github.com/stefanprodan/podinfo
 # License: Apache-2.0
-# Modifications: [Description of changes]
 ```
 
 ---
 
-**Last Updated:** 2025-10-04
+**Last Updated:** 2025-10-17
