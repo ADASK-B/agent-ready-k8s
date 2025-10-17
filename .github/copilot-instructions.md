@@ -36,9 +36,23 @@ Files/folders created, scripts changed, tech stack updated, phase completed.
 
 ## 📚 Documentation Registry
 
+### Quickstart
 | Document | Purpose | Link |
 |----------|---------|------|
-| **Quickstart** | Boot routine, after-reboot checklist | [`docs/quickstart/Quickstart.md`](../docs/quickstart/Quickstart.md) |
-| **Phase 0 Roadmap** | Complete task list, current status | [`docs/roadmap/Phase-0.md`](../docs/roadmap/Phase-0.md) |
-| **Architecture** | Design decisions, golden rules | [`docs/architecture/ARCHITECTURE.md`](../docs/architecture/ARCHITECTURE.md) |
+| **Boot Routine** | After-reboot checklist, verify system operational | [`docs/quickstart/Boot-Routine.md`](../docs/quickstart/Boot-Routine.md) |
+| **Setup Phase 0** | Local foundation setup, tools & components installed | [`docs/quickstart/Setup-Phase0.md`](../docs/quickstart/Setup-Phase0.md) |
+
+### Architecture
+| Document | Purpose | Link |
+|----------|---------|------|
+| **ARCHITECTURE** | Design decisions, golden rules, provider mapping | [`docs/architecture/ARCHITECTURE.md`](../docs/architecture/ARCHITECTURE.md) |
+
+### Roadmap
+| Document | Purpose | Link |
+|----------|---------|------|
+| **Phase 0** | Task list, current status | [`docs/roadmap/Phase-0.md`](../docs/roadmap/Phase-0.md) |
+
+### Overview
+| Document | Purpose | Link |
+|----------|---------|------|
 | **README** | Project overview, getting started | [`README.md`](../README.md) |
