@@ -1,255 +1,272 @@
+## 1) Executive summary (5-liner)
 
-### 1) Executive summary (5-liner)
-
-| Key                 | Summary                                                                                                                                                                                         |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Goal                | Multi-tenant SaaS template (Org → Projects) on Kubernetes with super-simple per-project chat, ready to evolve to AI-assisted chat later                                                         |
-| Tenancy             | **Organizations** (customers) own **Projects** (internal teams); strict isolation at app & DB level                                                                                             |
-| Core features (MVP) | Create Org, create Project, per-user project chat (1:1 channel), mock AI responder; hot-reload configs; GitOps CD                                                                               |
-| Platform            | K8s (self-managed), GitOps (Argo CD), Container runtime (containerd), IaC (Terraform), Images via OCI registry                                                                                  |
-| Config & Obs        | Config SoT: SQL (+ Redis Pub/Sub for hot reload); etcd only for K8s control plane (optional app etcd later). Observability: start in-cluster (Prom/Loki/Tempo), grow to central Mimir if needed |
-
----
-
-### 2) Glossary
-
-| Term                    | Definition (concise)                                                 |
-| ----------------------- | -------------------------------------------------------------------- |
-| Organization (Org)      | Tenant/customer boundary; owns users & projects                      |
-| Project                 | Work unit under an Org; holds members, settings, chat channels       |
-| Chat                    | Per-user private channel within a project; simple text + attachments |
-| Source of Truth (SoT)   | Authoritative datastore for a domain (e.g., configs in SQL)          |
-| Hot-Reload              | Apply config changes at runtime without pod restarts                 |
-| Config                  | User-tunable app settings (per org/project), **not** K8s resources   |
-| Secrets                 | Credentials/keys; never stored in plain text configs                 |
-| In-cluster vs. external | Runs inside the app cluster vs. on a separate cluster/service        |
+| Key          | Summary                                                                                                                                                                                                         |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Goal         | Multi-tenant SaaS template (Org → Projects) on Kubernetes with **ultra-simple per-user project chat** (canned actions only), upgradeable to AI later.                                                           |
+| Tenancy      | **Organizations** (customers) own **Projects** (internal teams). Isolation in app + DB (RLS).                                                                                                                   |
+| Core MVP     | Create Org, create Project, per-user **ephemeral chat actions** (👍/👎, Ready/Blocked/Review, “Deployed/Tests green”, simple polls), hot-reload configs, GitOps CD.                                             |
+| Platform     | K8s (self-managed), Argo CD (GitOps), Terraform (infra), OCI registry, NGINX Ingress.                                                                                                                           |
+| Config & Obs | Config SoT: **PostgreSQL** (+ **Redis Pub/Sub** hot-reload). etcd only for K8s control plane (optional app-etcd later). Observability: start in-cluster (Prom/Loki/Tempo), grow to central **Mimir** if needed. |
 
 ---
 
-### 3) RACI / Owner legend
+## 2) Glossary
 
-| Role     | Owns                                                      | Examples                       |
-| -------- | --------------------------------------------------------- | ------------------------------ |
-| Platform | K8s cluster, Ingress, Argo CD, registries, MinIO baseline | TLS, ingress routes, Argo apps |
-| App      | Backend, Frontend, schema, configs, chat logic            | APIs, UI, migrations           |
-| DBA      | SQL ops: backup/PITR, indexes, RLS, auditing              | Backups, restore drills        |
-| SecOps   | Secrets, policies, RBAC, image signing                    | Kyverno rules, key mgmt        |
-| SRE/Obs  | Monitoring, alerting, SLOs, on-call runbooks              | Prom, Loki, Tempo, dashboards  |
-
----
-
-### 4) Scope & phasing
-
-| Capability              | MVP                                       | Phase 2+                            | Out of scope (now)       |
-| ----------------------- | ----------------------------------------- | ----------------------------------- | ------------------------ |
-| Org & Project lifecycle | ✅                                         | Enhancements (quota, billing)       | —                        |
-| Per-user project chat   | ✅ (simple, text + attachments)            | AI assistant, threads, mentions     | Full Slack replacement   |
-| Config SoT & hot-reload | ✅ SQL + Redis Pub/Sub                     | Optional etcd for app configs       | Config via K8s etcd      |
-| Authentication          | ✅ Basic (email+magic link or simple OIDC) | SSO (Entra), RBAC fine-grained      | SCIM                     |
-| Observability           | ✅ In-cluster Prom/Loki/Tempo              | Central Mimir (multi-cluster), SLOs | Commercial APM           |
-| Secrets mgmt            | ✅ K8s Secrets (at rest encrypted)         | ESO + Vault/KeyVault                | Plain-text secrets       |
-| Backups                 | ✅ SQL/MinIO scheduled                     | Cross-region, PITR drills           | “No backup” mode         |
-| Compliance              | ✅ Audit logs in DB                        | DLP, retention policies per org     | Regulated industry packs |
+| Term                    | Definition                                                                                            |
+| ----------------------- | ----------------------------------------------------------------------------------------------------- |
+| Organization (Org)      | Tenant/customer boundary; owns users & projects.                                                      |
+| Project                 | Work unit under an Org; holds members, settings, **per-user chat**.                                   |
+| Chat (MVP)              | Per-user private channel; **only canned actions** (no free text), **no PII**, **no message storage**. |
+| SoT                     | Source of Truth (authoritative datastore).                                                            |
+| Hot-Reload              | Apply config changes without restarts (push + in-mem swap).                                           |
+| In-cluster vs. external | Runs inside app cluster vs. separate/managed platform.                                                |
 
 ---
 
-## End-to-End (E2E) flows — step tables
+## 3) Roles / RACI
 
-### 5) E2E: Create Organization
-
-| Step | Actor  | System                            | Data writes                      | Notes                                  |
-| ---- | ------ | --------------------------------- | -------------------------------- | -------------------------------------- |
-| 1    | Admin  | Backend API `POST /orgs`          | SQL: `organizations` (PENDING)   | RLS seeded                             |
-| 2    | System | Argo CD app sync (labels per org) | —                                | Namespaces optional (single or shared) |
-| 3    | System | Set defaults (quotas, policies)   | SQL: `service_configs`           | Audit trail                            |
-| 4    | System | Commit org → COMMITTED            | SQL: `organizations` (COMMITTED) | Saga rollback on error                 |
-
-### 6) E2E: Create Project
-
-| Step | Actor     | System                             | Data writes                             | Notes                        |
-| ---- | --------- | ---------------------------------- | --------------------------------------- | ---------------------------- |
-| 1    | Org Admin | Backend `POST /orgs/{id}/projects` | SQL: `projects`                         | Enforce org limits           |
-| 2    | System    | Init chat spaces                   | SQL: `project_members`, `chat_channels` | One private channel per user |
-| 3    | System    | Config defaults for project        | SQL: `service_configs`                  | Versioned                    |
-
-### 7) E2E: Post chat message
-
-| Step | Actor  | System                                              | Data writes                                   | Notes               |
-| ---- | ------ | --------------------------------------------------- | --------------------------------------------- | ------------------- |
-| 1    | User   | Frontend → Backend `POST /chats/{channel}/messages` | SQL: `chat_messages` (+ full-text idx)        | Attachments → MinIO |
-| 2    | System | Notify subscribers (WS/SSE)                         | Redis Pub/Sub (event)                         | Optional push       |
-| 3    | System | Persist attachment                                  | MinIO `org/{org}/project/{p}/channel/{c}/...` | Signed URLs         |
-
-### 8) E2E: Config change → Hot-reload
-
-| Step | Actor    | System                     | Data writes                          | Notes                 |
-| ---- | -------- | -------------------------- | ------------------------------------ | --------------------- |
-| 1    | Admin    | UI `PUT /configs`          | SQL: `service_configs` (version↑)    | Append-only history   |
-| 2    | Backend  | Publish change             | Redis `PUBLISH config:* "version=n"` | No secrets in events  |
-| 3    | Services | On event, GET fresh config | SQL read                             | In-memory swap <100ms |
+| Role     | Owns                                              | Examples                 |
+| -------- | ------------------------------------------------- | ------------------------ |
+| Platform | K8s, Ingress, Argo CD, registries, MinIO baseline | TLS, routes, Argo apps   |
+| App      | Backend, Frontend, schema, chat logic             | APIs, UI, migrations     |
+| DBA      | SQL ops: backup/PITR, indexes, RLS, audit         | Backups, restore drills  |
+| SecOps   | Secrets, RBAC/policies, image signing             | Kyverno, cosign          |
+| SRE/Obs  | Monitoring, alerting, SLOs, runbooks              | Prom/Loki/Tempo, Grafana |
 
 ---
 
-## Core architecture tables
+## 4) Scope & phasing
 
-### 9) Platform / Cluster
+| Capability              | MVP                                                                                      | Phase 2+                                     | Out of scope (now)      |
+| ----------------------- | ---------------------------------------------------------------------------------------- | -------------------------------------------- | ----------------------- |
+| Orgs & Projects         | ✅                                                                                        | Quotas, billing                              | —                       |
+| Chat                    | ✅ **Canned actions only** (no free text), **max 3 active chats/user/project**, ephemeral | Threads, AI assistant, mentions, attachments | Slack-like features     |
+| Config SoT & hot-reload | ✅ SQL + Redis Pub/Sub                                                                    | Optional app-etcd watches                    | K8s etcd for app config |
+| Auth                    | ✅ **Guest sign-in**, no registration                                                     | OIDC/SSO (Entra), roles                      | SCIM                    |
+| Observability           | ✅ Prom/Loki/Tempo in-cluster                                                             | Central **Mimir/Thanos**                     | Commercial APM          |
+| Secrets                 | ✅ K8s Secrets (enc at rest)                                                              | ESO→Vault/KeyVault                           | Plain-text secrets      |
+| Backups                 | ✅ SQL scheduled + PITR                                                                   | Cross-region, restore drills                 | “No backup” mode        |
 
-| Area           | Purpose              | Primary tech           | Placement   | HA/Backup            | Owner    | Scope |
-| -------------- | -------------------- | ---------------------- | ----------- | -------------------- | -------- | ----- |
-| Kubernetes     | Runtime & networking | K8s (kubeadm or cloud) | In-cluster  | Multi-AZ optional    | Platform | MVP   |
-| Ingress        | North-south traffic  | NGINX Ingress          | In-cluster  | Dual replicas        | Platform | MVP   |
-| GitOps CD      | Declarative deploys  | Argo CD (Helm)         | In-cluster  | HA pair optional     | Platform | MVP   |
-| IaC            | Provision infra      | Terraform              | External CI | State remote backend | Platform | MVP   |
-| Image registry | OCI images           | GHCR/Harbor (free)     | External    | Geo-replica optional | Platform | MVP   |
+---
 
-### 10) App services
+## 5) E2E flows
 
-| Service           | Function                      | Tech            | Endpoints            | Owner | Scope   |
-| ----------------- | ----------------------------- | --------------- | -------------------- | ----- | ------- |
-| Backend API       | Orgs, Projects, Chat, Configs | .NET or FastAPI | REST/OpenAPI, WS/SSE | App   | MVP     |
-| Frontend          | UI                            | React/Vite      | SPA + API calls      | App   | MVP     |
-| Mock AI           | Placeholder replies           | FastAPI worker  | Internal queue/API   | App   | MVP     |
-| (Later) AI Assist | Real AI                       | LLM gateway     | Async events         | App   | Phase 2 |
+### 5.1 Create Organization
 
-### 11) Data & storage
+| Step | Actor  | System         | Data writes                     | Notes                                             |
+| ---- | ------ | -------------- | ------------------------------- | ------------------------------------------------- |
+| 1    | Admin  | `POST /orgs`   | SQL: `organizations(PENDING)`   | Start **SAGA** + **idempotency** (`operation_id`) |
+| 2    | System | Apply defaults | SQL: `service_configs`          | Audit history                                     |
+| 3    | System | Isolation gate | K8s policy & labels             | `isolation-ready=true` gate                       |
+| 4    | System | Commit         | SQL: `organizations(COMMITTED)` | Rollback on error                                 |
 
-| Domain              | SoT                    | Why                    | Retention       | Placement              | HA/Backup           | Owner        | Scope   |
-| ------------------- | ---------------------- | ---------------------- | --------------- | ---------------------- | ------------------- | ------------ | ------- |
-| Orgs/Projects/Users | **PostgreSQL** (free)  | Relational, RLS, audit | 12–36 mo        | In-cluster or external | PITR, nightly       | DBA          | MVP     |
-| Chats (messages)    | **PostgreSQL** (+ FTS) | Queryable, joinable    | Per-org policy  | Same as DB             | PITR, partitioning  | DBA          | MVP     |
-| Attachments         | **MinIO** (S3 API)     | Large/binary; cheap    | Size-/age-based | In-cluster (start)     | Versioning, backups | Platform     | MVP     |
-| Configs (SoT)       | **PostgreSQL**         | Audit/versioning       | Indefinite      | Same as DB             | Backups             | App/DBA      | MVP     |
-| Config notify       | **Redis Pub/Sub**      | Hot-reload push        | —               | In-cluster             | None (ephemeral)    | App/Platform | MVP     |
-| K8s control         | **etcd (kube)**        | Control plane          | —               | Control plane          | Managed by K8s      | Platform     | MVP     |
-| (Optional) App etcd | etcd                   | Native watches         | Short           | In-cluster             | Snapshots           | Platform/App | Phase 2 |
+### 5.2 Create Project
 
-### 12) Config & secrets
+| Step | Actor     | System                     | Data writes                          | Notes                 |
+| ---- | --------- | -------------------------- | ------------------------------------ | --------------------- |
+| 1    | Org Admin | `POST /orgs/{id}/projects` | SQL: `projects`                      | RLS based on `org_id` |
+| 2    | System    | Prepare chat metadata      | SQL: `chat_sessions` (per-user caps) | No messages table     |
 
-| Type          | Store                     | Pattern                       | Notes                | Owner    | Scope |
-| ------------- | ------------------------- | ----------------------------- | -------------------- | -------- | ----- |
-| App config    | SQL (SoT)                 | Versioned rows + Redis notify | No secrets in events | App/DBA  | MVP   |
-| Secrets       | K8s Secrets (AES at rest) | Mount as env/vol              | ESO→Vault later      | SecOps   | MVP   |
-| System config | Helm values               | Git-tracked                   | Through Argo CD      | Platform | MVP   |
+### 5.3 Open/use chat (canned actions)
 
-### 13) Observability & alerting (recommendation path)
+| Step | Actor  | System                                                                       | Data writes                                                                 | Notes                            |
+| ---- | ------ | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------- | -------------------------------- |
+| 1    | User   | Open chat                                                                    | SQL: `chat_sessions` (ensure **≤3 active**)                                 | FIFO close oldest when 4th       |
+| 2    | User   | Send action (👍/👎, Ready/Blocked/Review, “Deployed/Tests green”, poll vote) | **No message storage**; optional **aggregated counters** per channel in SQL | **No PII**, ephemeral WS fan-out |
+| 3    | System | Fan-out                                                                      | Redis Pub/Sub → connected clients                                           | No persistence                   |
+
+### 5.4 Config change → Hot-reload
+
+| Step | Actor    | System            | Data writes                          | Notes                                       |
+| ---- | -------- | ----------------- | ------------------------------------ | ------------------------------------------- |
+| 1    | Admin    | UI `PUT /configs` | SQL `service_configs` (version++)    | Append-only `config_history`                |
+| 2    | Backend  | Publish           | Redis `PUBLISH config:* "version=n"` | No secrets in events                        |
+| 3    | Services | Fetch & swap      | SQL read → in-memory update          | Warm-load on start; reconcile loop 5–10 min |
+
+---
+
+## 6) Platform / Cluster
+
+| Area                | Purpose                    | Primary tech           | Placement     | HA/Backup            | Owner    | Scope |
+| ------------------- | -------------------------- | ---------------------- | ------------- | -------------------- | -------- | ----- |
+| Kubernetes          | Runtime & networking       | kubeadm/AKS/EKS/GKE    | In-cluster    | Multi-AZ optional    | Platform | MVP   |
+| Ingress             | North-south                | **NGINX Ingress**      | In-cluster    | 2 replicas           | Platform | MVP   |
+| GitOps CD           | Declarative deploys        | **Argo CD** + **Helm** | In-cluster    | HA pair optional     | Platform | MVP   |
+| IaC                 | Provision infra            | **Terraform**          | External CI   | Remote state         | Platform | MVP   |
+| Registry            | OCI (images + Helm-as-OCI) | **GHCR/Harbor**        | External      | Geo-replica optional | Platform | MVP   |
+| Control plane store | K8s state                  | **etcd (kube)**        | Control plane | K8s-managed          | Platform | MVP   |
+
+---
+
+## 7) Application services
+
+| Service     | Function                                        | Tech            | Endpoints         | Scale   | Storage           | Owner |
+| ----------- | ----------------------------------------------- | --------------- | ----------------- | ------- | ----------------- | ----- |
+| Frontend    | UI (Orgs/Projects/Chat actions)                 | React/Vite      | HTTPS via Ingress | HPA 1–3 | none              | App   |
+| Backend API | Orgs, Projects, **Chat sessions/caps**, Configs | .NET or FastAPI | REST + WS/SSE     | HPA 1–3 | PostgreSQL, Redis | App   |
+| Mock “AI”   | Deterministic canned replies (for demo)         | FastAPI worker  | internal HTTP     | 1–2     | none              | App   |
+
+---
+
+## 8) Data & storage
+
+| Domain                   | SoT                        | Why                                                   | Retention        | Placement              | HA/Backup           | Owner    | Notes                               |
+| ------------------------ | -------------------------- | ----------------------------------------------------- | ---------------- | ---------------------- | ------------------- | -------- | ----------------------------------- |
+| Orgs/Projects/Membership | **PostgreSQL**             | Relational + **RLS** + audit                          | 12–36 mo         | In-cluster or external | **PITR** + nightly  | DBA      | RLS on `org_id`/`project_id`        |
+| Chat sessions/counters   | **PostgreSQL**             | Enforce **≤3 chats/user/project**, aggregate counters | 30–90 d          | Same as DB             | PITR                | DBA      | **No messages stored**              |
+| Configs (SoT)            | **PostgreSQL**             | Versioned, auditable                                  | Indefinite       | Same as DB             | Backups             | App/DBA  | `service_configs`, `config_history` |
+| Config notify            | **Redis Pub/Sub**          | Hot-reload push                                       | —                | In-cluster             | Ephemeral           | Platform | TLS, ACL, no secrets                |
+| Assets (future)          | **MinIO** (optional later) | Large binaries                                        | Lifecycle policy | In-cluster (start)     | Versioning + backup | Platform | **Disabled in MVP**                 |
+
+---
+
+## 9) Config & secrets
+
+| Type          | Store                         | Pattern                                                                   | Security                     | Owner    | Scope |
+| ------------- | ----------------------------- | ------------------------------------------------------------------------- | ---------------------------- | -------- | ----- |
+| App config    | **SQL (SoT)**                 | Monotonic `version`; Redis **version-only** events; warm-load + reconcile | DB auth + RLS                | App/DBA  | MVP   |
+| Secrets       | **K8s Secrets** (enc at rest) | Mounted env/vol                                                           | ESO→Vault/KeyVault (Phase 2) | SecOps   | MVP   |
+| System config | Helm values                   | Git-tracked via Argo CD                                                   | Reviews/PRs                  | Platform | MVP   |
+
+---
+
+## 10) Observability (recommended path)
 
 | Layer      | MVP (in-cluster)          | Grow-up (central)                 | When to upgrade               | Owner   |
 | ---------- | ------------------------- | --------------------------------- | ----------------------------- | ------- |
-| Metrics    | Prometheus                | **Mimir** (central, multi-tenant) | Cross-cluster, long retention | SRE/Obs |
-| Logs       | Loki                      | Loki (central)                    | Many clusters/teams           | SRE/Obs |
-| Traces     | Tempo                     | Tempo (central)                   | Cross-cluster tracing         | SRE/Obs |
-| Gateway    | Alloy/OTel Collector      | Same (HA)                         | Higher ingestion              | SRE/Obs |
+| Metrics    | **Prometheus**            | **Mimir** (central, multi-tenant) | Retention/scale/multi-cluster | SRE/Obs |
+| Logs       | **Loki**                  | Loki (central)                    | Many teams/clusters           | SRE/Obs |
+| Traces     | **Tempo**                 | Tempo (central)                   | Cross-cluster tracing         | SRE/Obs |
+| Gateway    | Alloy / OTel Collector    | Same (HA)                         | Higher ingest                 | SRE/Obs |
 | Dashboards | Grafana                   | Grafana (org-multi-tenant)        | Shared platform               | SRE/Obs |
 | Alerts     | Prom rules + Alertmanager | Central AM                        | Global SLOs                   | SRE/Obs |
 
-### 14) CI/CD
+---
 
-| Area     | Purpose                    | Tech                           | Pipeline highlights                                                 | Owner    | Scope |
-| -------- | -------------------------- | ------------------------------ | ------------------------------------------------------------------- | -------- | ----- |
-| CI       | Build/test images          | GitHub Actions/Azure Pipelines | Build (Docker/BuildKit or Buildpacks), test, SBOM, sign, push (OCI) | App      | MVP   |
-| CD       | GitOps deploy              | Argo CD                        | Helm charts/values per env, PR-based promotes                       | Platform | MVP   |
-| Registry | OCI (images & Helm as OCI) | GHCR/Harbor                    | Immutable tags, digest pinning                                      | Platform | MVP   |
+## 11) CI/CD & supply chain
 
-### 15) Security & compliance
-
-| Control     | Tooling                | Baseline                     | Owner   | Scope |
-| ----------- | ---------------------- | ---------------------------- | ------- | ----- |
-| Network     | NetworkPolicy          | Deny-all baseline, allowlist | SecOps  | MVP   |
-| Policy      | Kyverno/Gatekeeper     | Image provenance, NS guards  | SecOps  | MVP   |
-| Image trust | cosign                 | Keyless or KMS-backed        | SecOps  | MVP   |
-| AuthN       | Simple OIDC/magic link | JWT short TTL                | App     | MVP   |
-| AuthZ       | RBAC per org/project   | DB RLS + app checks          | App/DBA | MVP   |
-| Audit       | DB audit tables        | Who/when/what                | DBA     | MVP   |
-
-### 16) Operations & runbooks
-
-| Runbook                    | Cadence        | Owner    | Notes                   |
-| -------------------------- | -------------- | -------- | ----------------------- |
-| SQL backup & restore drill | Weekly/monthly | DBA      | PITR verified           |
-| MinIO backup/versioning    | Weekly         | Platform | Lifecycle rules         |
-| Redis health               | Daily          | Platform | Ephemeral; restart safe |
-| Argo app drift             | Daily          | Platform | Sync policy & PR flow   |
-| TLS rotation               | Per cert       | SecOps   | ACME/internal PKI       |
-| Incident triage            | On alert       | SRE/Obs  | Logs/metrics/traces     |
+| Area     | Purpose           | Tech                           | Pipeline highlights                                                                                                     | Owner    | Scope |
+| -------- | ----------------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------- | -------- | ----- |
+| CI       | Build/test images | GitHub Actions/Azure Pipelines | Build (Docker/BuildKit or Buildpacks) → Test → **SBOM (syft)** → **Vuln scan (Trivy)** → **Sign (cosign)** → Push (OCI) | App      | MVP   |
+| CD       | GitOps deploy     | **Argo CD**                    | Helm charts/values per env, PR-based promotions, drift detection                                                        | Platform | MVP   |
+| Registry | OCI               | **GHCR / Harbor**              | Immutable tags, digest pinning, Helm-as-OCI                                                                             | Platform | MVP   |
 
 ---
 
-## Cost & alternatives (free-first, swappable)
+## 12) Security & compliance guardrails
 
-### 17) Cost/alt matrix
-
-| Area          | Free default                | Paid option (if customer) | Migration effort          |
-| ------------- | --------------------------- | ------------------------- | ------------------------- |
-| Relational DB | **PostgreSQL**              | SQL Server / Azure SQL    | Low (ORM, dialect checks) |
-| Object store  | **MinIO**                   | S3 / Azure Blob           | Low (S3 API compatible)   |
-| Pub/Sub       | **Redis** (OSS)             | Redis Enterprise          | Low (endpoint swap)       |
-| Images/Charts | **GHCR / Harbor**           | ACR/ECR/GCR               | Low (OCI standard)        |
-| Observability | **Prom+Loki+Tempo+Grafana** | Datadog/New Relic         | Medium (agent/exporters)  |
-| Ingress       | **NGINX Ingress**           | NGINX Plus / F5           | Low (annotations)         |
-| Secrets       | **K8s Secrets**             | Vault/KeyVault            | Medium (ESO wiring)       |
-| GitOps        | **Argo CD**                 | —                         | —                         |
-
----
-
-## Assumptions & constraints
-
-### 18) Assumptions
-
-| Assumption                          | Why it matters                  |
-| ----------------------------------- | ------------------------------- |
-| Single primary app cluster at start | Simpler ops and lower cost      |
-| 5-minute acceptable downtime        | Enables pragmatic HA choices    |
-| Storage & power are “given”         | Focus on software stack only    |
-| Free-first tools                    | Customer can swap to paid later |
-
-### 19) Risks & mitigations
-
-| Risk           | Impact              | Mitigation                             |
-| -------------- | ------------------- | -------------------------------------- |
-| Config drift   | Unexpected behavior | GitOps + sync policies + alerts        |
-| Chat growth    | Large tables        | Partitioning, FTS, MinIO for big files |
-| Secrets sprawl | Breach risk         | Centralize via ESO→Vault later         |
-| Scale plateau  | Performance issues  | HPA, DB tuning, move to central Mimir  |
+| Control          | Baseline                                                             |
+| ---------------- | -------------------------------------------------------------------- |
+| **No PII**       | Guest users only; **no analytics**, no personal data stored.         |
+| Network          | NetworkPolicy deny-all + allowlists.                                 |
+| Policy           | Kyverno/Gatekeeper: labels, images, signatures, namespace gates.     |
+| Image trust      | **cosign** keyless/KMS.                                              |
+| AuthN            | Guest sign-in, JWT short TTL, **JTI denylist** for emergency revoke. |
+| AuthZ            | App RBAC + **PostgreSQL RLS** on `org_id`/`project_id`.              |
+| Audit            | `config_history`, org/project lifecycle audit.                       |
+| SAGA/Idempotency | `operation_id`, `PENDING/COMMITTED/FAILED`, compensations.           |
+| Redis hardening  | TLS, ACL, backoff, no secrets in channels.                           |
 
 ---
 
-## Org/Project/Chat data model snapshot
+## 13) Operations & runbooks
 
-### 20) Minimal schema view
-
-| Entity          | Key fields                                       | Notes                             |
-| --------------- | ------------------------------------------------ | --------------------------------- |
-| organizations   | id, name, owner_id, status                       | `COMMITTED/FAILED`; audit         |
-| projects        | id, org_id, name                                 | FK → orgs; RLS on org_id          |
-| users           | id, org_id, email                                | Org-scoped                        |
-| project_members | project_id, user_id, role                        | Access control                    |
-| chat_channels   | id, project_id, user_id                          | One private per user per project  |
-| chat_messages   | id, channel_id, user_id, text, ts                | FTS indexes; attachments to MinIO |
-| service_configs | scope (org/project/service), key, value, version | Append-only history               |
-| config_history  | id, who, when, old/new, reason                   | Audit                             |
+| Runbook                     | Cadence        | Owner    | Notes                 |
+| --------------------------- | -------------- | -------- | --------------------- |
+| SQL backup + **PITR drill** | Weekly/monthly | DBA      | Target RPO 5 min      |
+| Argo app drift review       | Daily          | Platform | Enforce sync policies |
+| Redis health                | Daily          | Platform | Ephemeral; restart OK |
+| TLS rotation                | Per-cert       | SecOps   | ACME/internal PKI     |
+| Incident triage             | On alert       | SRE/Obs  | Logs/metrics/traces   |
+| Config reconcile            | 5–10 min loop  | App      | Heals missed events   |
 
 ---
 
-## MinIO tenancy & placement
+## 14) Cost & alternatives (free-first, swappable)
 
-### 21) Object storage strategy
-
-| Topic               | MVP choice                                                                                      | Alternatives                                   |
-| ------------------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| Placement           | **In-cluster** MinIO (1–3 nodes)                                                                | External MinIO / S3/Blob later                 |
-| Multi-tenant layout | Bucket per org *or* per project; prefix hierarchy (`org/{org}/project/{proj}/channel/{chan}/…`) | Centralized bucket with strict prefix policies |
-| Access              | Signed URLs via backend                                                                         | Direct SDK if needed                           |
-| Lifecycle           | Retain X days/GB per org                                                                        | Customer-specific tiering                      |
-| Backup              | Versioning + periodic backup                                                                    | Cross-region if needed                         |
+| Area          | Free default                | Paid option (if customer) | Migration effort       |
+| ------------- | --------------------------- | ------------------------- | ---------------------- |
+| Relational DB | **PostgreSQL**              | SQL Server / Azure SQL    | Low (ORM/dialect)      |
+| Object store  | **MinIO** (later)           | S3 / Azure Blob           | Low (S3 API)           |
+| Pub/Sub       | **Redis OSS**               | Redis Enterprise          | Low (endpoint swap)    |
+| Registry      | **GHCR / Harbor**           | ACR/ECR/GCR               | Low (OCI)              |
+| Observability | **Prom+Loki+Tempo+Grafana** | Datadog/New Relic         | Medium (agents/export) |
+| Ingress       | **NGINX Ingress**           | F5/NGINX Plus             | Low (annotations)      |
+| Secrets       | **K8s Secrets**             | Vault/KeyVault            | Medium (ESO wiring)    |
+| GitOps        | **Argo CD**                 | —                         | —                      |
 
 ---
 
-### 22) Final recommendation snapshot
+## 15) Assumptions & constraints
 
-| Layer         | Recommendation                                                                                                                                                    |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Configs       | **SQL as SoT + Redis Pub/Sub** for hot-reload (simple, auditable). Add **app-etcd** only if you truly need native watches.                                        |
-| Observability | Start **in-cluster** (Prom/Loki/Tempo/Grafana). If retention/scale/tenants grow, move metrics to a **central Mimir** cluster; keep logs/traces central as needed. |
-| Storage       | **PostgreSQL + MinIO** by default. Swap to MSSQL/S3 if a customer requires.                                                                                       |
-| GitOps        | **Argo CD with Helm (OCI or charts)**, values per env/org; digest-pinned.                                                                                         |
-| Security      | K8s Secrets (enc-at-rest) now; ESO→Vault/KeyVault later; cosign for images; Kyverno baseline.                                                                     |
+| Assumption                          | Why it matters                 |
+| ----------------------------------- | ------------------------------ |
+| Single primary app cluster at start | Simpler ops, lower cost.       |
+| 5-minute acceptable downtime        | Pragmatic HA choices.          |
+| Free-first tooling                  | Customers can swap paid later. |
+| No PII                              | Eases DSGVO exposure for MVP.  |
+
+---
+
+## 16) Risks & mitigations
+
+| Risk          | Impact              | Mitigation                                |
+| ------------- | ------------------- | ----------------------------------------- |
+| Config drift  | Unexpected behavior | GitOps + sync policies + alerts           |
+| Chat misuse   | PII typed into UI   | **No free text**; canned actions only     |
+| Scale plateau | Performance issues  | HPA, DB tuning, central Mimir when needed |
+| Secret sprawl | Breach risk         | ESO→Vault/KeyVault in Phase 2             |
+
+---
+
+## 17) Ownership & repos
+
+| Area                  | Owner        | Repo        |
+| --------------------- | ------------ | ----------- |
+| App code (FE/BE/Mock) | Product eng  | `app-git`   |
+| Helm & Argo apps      | Platform eng | `ops-git`   |
+| Infra-as-Code         | Platform eng | `infra-git` |
+| Docs & runbooks       | Both         | `docs-git`  |
+
+---
+
+## 18) Minimal DB schema (heads-up)
+
+> All with **RLS** on `org_id` / `project_id`.
+
+| Table             | Key fields                                                                           | Notes                    |
+| ----------------- | ------------------------------------------------------------------------------------ | ------------------------ |
+| `organizations`   | id, name, status(`PENDING/COMMITTED/FAILED`), created_at                             | SAGA statuses            |
+| `projects`        | id, org_id, name, created_at                                                         | FK → orgs                |
+| `users`           | id, org_id, user_key (guest-NNNN)                                                    | Non-PII identifier       |
+| `project_members` | project_id, user_id, role                                                            | Access control           |
+| `chat_sessions`   | id, org_id, project_id, user_id, opened_at, closed_at                                | **Enforce ≤3 active**    |
+| `chat_counters`   | channel_id, metric (👍/👎/Ready/Blocked/Review/choiceX), value                       | Optional aggregates only |
+| `service_configs` | id, org_id, scope(service/project), key, value_json, version, updated_by, updated_at | SoT                      |
+| `config_history`  | id, org_id, key, old_json, new_json, version, actor, reason, ts                      | Audit                    |
+
+> **No `chat_messages` table in MVP.** No free text is stored.
+
+---
+
+## 19) MinIO strategy (future, not MVP)
+
+| Topic     | MVP          | Phase 2                      |
+| --------- | ------------ | ---------------------------- |
+| Placement | Not required | In-cluster MinIO (1–3 nodes) |
+| Tenancy   | —            | Bucket or prefix per Org     |
+| Access    | —            | Signed URLs via backend      |
+| Lifecycle | —            | Per-Org size/age policies    |
+| Backup    | —            | Versioning + backup jobs     |
+
+---
+
+## 20) Final recommendation snapshot
+
+| Layer         | Recommendation                                                                                                                                        |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Configs       | **SQL as SoT + Redis Pub/Sub** (simple, auditable, fast). Consider **app-etcd** only if you truly need native watches everywhere.                     |
+| Observability | Start **in-cluster** (Prom/Loki/Tempo/Grafana). Move metrics to a **central Mimir** cluster when retention/scale/multi-cluster needs arise.           |
+| Security      | Guest sign-in; **no PII**; short-lived JWT + JTI denylist; RLS; Kyverno; cosign.                                                                      |
+| Operations    | PITR for DB, reconcile loop for config, drift detection via Argo, runbooks for backup/restore and TLS rotation.                                       |
+| Chat          | **Canned-actions only**, ephemeral WS fan-out, no message storage, ≤3 active chats per user per project; future AI/chat upgrades are straightforward. |
