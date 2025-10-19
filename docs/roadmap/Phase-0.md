@@ -107,7 +107,7 @@
 - [x] Add domains to /etc/hosts (demo.localhost, argocd.local) - Automated in deploy scripts
 - [x] Test podinfo HTTP endpoint - Automated in test scripts
 - [x] Test Argo CD HTTP endpoint - Automated in test scripts
-- [ ] Login to Argo CD web UI - Manual browser test
+- [x] Login to Argo CD web UI - Manual browser test
 - [x] Verify PostgreSQL and Redis connectivity
 - [x] Document all credentials and access URLs
 - [x] Create Phase 0 completion documentation
