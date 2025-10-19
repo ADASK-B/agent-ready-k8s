@@ -86,4 +86,4 @@ kubectl get ingress -A
 - All commands **idempotent** (safe to re-run)
 - Container auto-starts with Docker
 - Pods auto-restart after reboot
-- On persistent failure → See [Setup Phase 0](Setup-Phase0.md)
+- On persistent failure → See [Phase 0 Setup Guide](../../setup-template/phase0-template-foundation/PHASE0-SETUP.md)
