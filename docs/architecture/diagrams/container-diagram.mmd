@@ -5,56 +5,56 @@ graph TB
     subgraph User
         Browser[🌐 Browser<br/>React/Vue Frontend]
     end
-    
+
     subgraph Kubernetes Cluster
         subgraph Ingress Layer
             Ingress[🚪 NGINX Ingress<br/>TLS Termination]
         end
-        
+
         subgraph Application
             Frontend[🎨 Frontend<br/>Static Assets<br/>Port 80]
             Backend[⚙️ Backend<br/>REST API<br/>Port 8000]
         end
-        
+
         subgraph Data Layer
             PostgreSQL[💾 PostgreSQL<br/>Source of Truth<br/>Port 5432]
             Redis[🔥 Redis<br/>Pub/Sub Hot-Reload<br/>Port 6379]
             MinIO[📦 MinIO<br/>Object Storage<br/>Planned Phase 2]
         end
-        
+
         subgraph Observability
             Prometheus[📊 Prometheus<br/>Metrics]
             Loki[📝 Loki<br/>Logs]
             Tempo[🔍 Tempo<br/>Traces]
             Grafana[📈 Grafana<br/>Dashboards]
         end
-        
+
         subgraph GitOps
             ArgoCD[🔄 Argo CD<br/>Continuous Deployment]
         end
     end
-    
+
     subgraph External
         Git[📚 Git Repo]
         Registry[📦 Registry]
         DNS[🌐 DNS]
     end
-    
+
     %% User Flow
     Browser -->|HTTPS| Ingress
     Ingress -->|Route /| Frontend
     Ingress -->|Route /api| Backend
-    
+
     %% Application Flow
     Frontend -->|API Calls| Backend
     Backend -->|Read/Write| PostgreSQL
     Backend -->|Pub/Sub| Redis
     Backend -->|Future| MinIO
-    
+
     %% Hot-Reload Flow
     Backend -->|PUBLISH config:*| Redis
     Redis -.->|SUBSCRIBE| Backend
-    
+
     %% Observability
     Backend -->|Metrics| Prometheus
     Backend -->|Logs| Loki
@@ -62,25 +62,25 @@ graph TB
     Prometheus --> Grafana
     Loki --> Grafana
     Tempo --> Grafana
-    
+
     %% GitOps
     Git -->|Sync| ArgoCD
     ArgoCD -->|Deploy| Frontend
     ArgoCD -->|Deploy| Backend
     ArgoCD -->|Deploy| PostgreSQL
-    
+
     %% External
     Frontend -->|Pull Images| Registry
     Backend -->|Pull Images| Registry
     Ingress -->|Manage| DNS
-    
+
     %% Styling
     classDef userStyle fill:#E8F4F8,stroke:#0288D1,stroke-width:2px
     classDef appStyle fill:#B3E5FC,stroke:#0288D1,stroke-width:2px
     classDef dataStyle fill:#FFE082,stroke:#F57C00,stroke-width:2px
     classDef obsStyle fill:#FFAB91,stroke:#E64A19,stroke-width:2px
     classDef gitopsStyle fill:#CE93D8,stroke:#8E24AA,stroke-width:2px
-    
+
     class Browser userStyle
     class Frontend,Backend appStyle
     class PostgreSQL,Redis,MinIO dataStyle

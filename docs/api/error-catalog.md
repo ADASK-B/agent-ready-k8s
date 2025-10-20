@@ -492,29 +492,29 @@ async function fetchOrganizations() {
 
     if (!response.ok) {
       const error = await response.json();
-      
+
       switch (error.error_code) {
         case "TOKEN_EXPIRED":
           // Refresh token and retry
           await refreshToken();
           return fetchOrganizations();
-        
+
         case "RATE_LIMIT_EXCEEDED":
           // Wait and retry
           const retryAfter = response.headers.get("Retry-After");
           await sleep(parseInt(retryAfter) * 1000);
           return fetchOrganizations();
-        
+
         case "UNAUTHORIZED":
         case "TOKEN_REVOKED":
           // Redirect to sign-in
           window.location.href = "/signin";
           break;
-        
+
         case "NOT_FOUND":
           // Show "Organization not found" message
           throw new Error(error.message);
-        
+
         default:
           // Generic error
           throw new Error(error.message);

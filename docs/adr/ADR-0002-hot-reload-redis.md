@@ -122,12 +122,12 @@ async for message in pubsub.listen():
     if message["type"] == "message":
         channel = message["channel"]  # "config:ai:threshold"
         version = message["data"]     # "version=5"
-        
+
         # Check if newer version
         if int(version) > local_version:
             # Fetch new value from PostgreSQL (SoT)
             new_value = await db.query(
-                "SELECT value FROM service_configs WHERE key = ?", 
+                "SELECT value FROM service_configs WHERE key = ?",
                 key
             )
             # Update in-memory config
@@ -181,7 +181,7 @@ async def startup():
     for config in configs:
         in_memory_config[config.key] = config.value
         local_versions[config.key] = config.version
-    
+
     # Then subscribe to Redis for updates
     pubsub.subscribe("config:*")
 ```
@@ -193,7 +193,7 @@ async def startup():
 async def reconcile():
     while True:
         await asyncio.sleep(600)  # 10 minutes
-        
+
         db_versions = await db.query("SELECT key, version FROM service_configs")
         for row in db_versions:
             if row.version > local_versions.get(row.key, 0):

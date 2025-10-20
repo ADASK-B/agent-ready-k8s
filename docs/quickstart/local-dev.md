@@ -513,7 +513,7 @@ services:
       POSTGRES_DB: demo-platform
     ports:
       - "5432:5432"
-  
+
   redis:
     image: redis:7
     ports:

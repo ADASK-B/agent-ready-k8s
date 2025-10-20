@@ -4,10 +4,10 @@ info:
   version: 1.0.0
   description: |
     REST API for multi-tenant SaaS platform with Organizations, Projects, and Chat.
-    
+
     **Authentication:** JWT Bearer token (Guest Sign-In, no registration)
     **Base URL:** `https://api.platform.example.com`
-    
+
     See [API Conventions](conventions.md) for detailed guidelines.
   contact:
     name: Platform Team
@@ -51,7 +51,7 @@ paths:
       summary: Guest Sign-In
       description: |
         Sign in as guest (no registration, no PII). Returns JWT with 15-minute TTL.
-        
+
         **ADR:** [ADR-0004 Guest Auth](../adr/ADR-0004-guest-auth.md)
       operationId: guestSignIn
       security: []  # No auth required for sign-in
@@ -391,7 +391,7 @@ paths:
       summary: Send Chat Action
       description: |
         Send a canned chat action (no free text allowed).
-        
+
         **ADR:** [ADR-0005 Canned Chat](../adr/ADR-0005-canned-chat.md)
       operationId: sendChatAction
       parameters:
@@ -454,7 +454,7 @@ paths:
       summary: List Configs
       description: |
         List all service configs (AI thresholds, feature flags, quotas).
-        
+
         **ADR:** [ADR-0001 Config SoT SQL](../adr/ADR-0001-config-sot-sql.md)
       operationId: listConfigs
       parameters:
@@ -506,7 +506,7 @@ paths:
       summary: Update Config (Hot-Reload)
       description: |
         Update config value. Triggers hot-reload via Redis Pub/Sub (<100ms).
-        
+
         **ADR:** [ADR-0002 Hot-Reload Redis](../adr/ADR-0002-hot-reload-redis.md)
       operationId: updateConfig
       parameters:

@@ -111,15 +111,15 @@ spec:
               set -e
               TIMESTAMP=$(date +%Y%m%d_%H%M%S)
               BACKUP_FILE="/tmp/backup-${TIMESTAMP}.sql.gz"
-              
+
               # pg_dump with compression
               pg_dump --verbose --clean --if-exists | gzip > $BACKUP_FILE
-              
+
               # Upload to S3/MinIO
               apt-get update && apt-get install -y awscli
               aws s3 cp $BACKUP_FILE s3://postgresql-backups/$(date +%Y)/$(date +%m)/ \
                 --endpoint-url https://minio.example.com
-              
+
               # Log success
               echo "Backup completed: $BACKUP_FILE"
           restartPolicy: OnFailure
@@ -312,14 +312,14 @@ spec:
               # Download latest backup
               aws s3 cp s3://postgresql-backups/$(date +%Y)/$(date +%m)/ /tmp/ \
                 --recursive --endpoint-url https://minio.example.com
-              
+
               # Restore to test DB
               LATEST_BACKUP=$(ls -t /tmp/*.sql.gz | head -1)
               gunzip -c $LATEST_BACKUP | psql -U postgres -d test_restore
-              
+
               # Verify row counts
               psql -U postgres -d test_restore -c "SELECT 'organizations', count(*) FROM organizations;"
-              
+
               # Drop test DB
               psql -U postgres -c "DROP DATABASE test_restore;"
 ```

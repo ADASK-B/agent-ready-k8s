@@ -92,12 +92,12 @@ enum ChatAction {
   // Reactions
   THUMBS_UP = "👍",
   THUMBS_DOWN = "👎",
-  
+
   // Status Updates
   READY = "Ready",
   BLOCKED = "Blocked",
   IN_REVIEW = "In Review",
-  
+
   // Deployment Events
   DEPLOYED = "Deployed",
   TESTS_GREEN = "Tests Green",
@@ -125,11 +125,11 @@ enum ChatAction {
 @router.websocket("/ws/projects/{project_id}/chat")
 async def chat_websocket(websocket: WebSocket, project_id: str):
     await websocket.accept()
-    
+
     # Subscribe to Redis Pub/Sub channel
     pubsub = redis.pubsub()
     await pubsub.subscribe(f"chat:{project_id}")
-    
+
     async for message in pubsub.listen():
         if message["type"] == "message":
             # Fan-out to WebSocket client
@@ -145,14 +145,14 @@ async def send_chat_action(project_id: str, action: ChatAction, user_id: str):
     # Validate action (must be in enum)
     if action not in ChatAction.__members__.values():
         raise HTTPException(400, "Invalid action")
-    
+
     # Publish to Redis (ephemeral)
     await redis.publish(f"chat:{project_id}", json.dumps({
         "user_id": user_id,
         "action": action.value,
         "timestamp": datetime.utcnow().isoformat()
     }))
-    
+
     return {"status": "sent"}
 ```
 
@@ -258,13 +258,13 @@ async def chat_websocket(websocket: WebSocket, token: str):
     except jwt.ExpiredSignatureError:
         await websocket.close(code=1008, reason="Token expired")
         return
-    
+
     # Check if token revoked
     jti = payload["jti"]
     if await redis.exists(f"denylist:{jti}"):
         await websocket.close(code=1008, reason="Token revoked")
         return
-    
+
     # Accept connection
     await websocket.accept()
 ```

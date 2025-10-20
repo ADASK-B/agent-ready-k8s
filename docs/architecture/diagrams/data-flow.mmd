@@ -7,7 +7,7 @@ sequenceDiagram
     participant PostgreSQL
     participant Redis
     participant Pods as Backend Pods (N)
-    
+
     Note over User,Pods: 1. Create Organization
     User->>Frontend: Click "New Org"
     Frontend->>Backend: POST /api/organizations
@@ -15,7 +15,7 @@ sequenceDiagram
     PostgreSQL-->>Backend: org_id=123
     Backend-->>Frontend: { id: 123, name: "ACME" }
     Frontend-->>User: Show "ACME Corp"
-    
+
     Note over User,Pods: 2. Create Project
     User->>Frontend: Click "New Project"
     Frontend->>Backend: POST /api/organizations/123/projects
@@ -23,14 +23,14 @@ sequenceDiagram
     PostgreSQL-->>Backend: project_id=456
     Backend-->>Frontend: { id: 456, name: "HR Portal" }
     Frontend-->>User: Show "HR Portal"
-    
+
     Note over User,Pods: 3. Open Chat (Ephemeral)
     User->>Frontend: Open Chat for Project 456
     Frontend->>Backend: WS /api/chat?project_id=456
     Note over Backend: No DB write<br/>(ephemeral channel)
     Backend-->>Frontend: WS connected
     Frontend-->>User: Chat UI ready
-    
+
     Note over User,Pods: 4. Chat Action (Canned Only)
     User->>Frontend: Click 👍 (Ready)
     Frontend->>Backend: WS message: { action: "ready" }
@@ -39,7 +39,7 @@ sequenceDiagram
     Backend-->>Pods: Fan-out WS to project members
     Pods-->>Frontend: WS update
     Frontend-->>User: Show "👍 Ready"
-    
+
     Note over User,Pods: 5. Config Hot-Reload
     User->>Frontend: Update AI Threshold
     Frontend->>Backend: PUT /api/configs { threshold: 0.9 }

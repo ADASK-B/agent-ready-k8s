@@ -166,7 +166,7 @@ setInterval(async () => {
     method: "POST",
     headers: { Authorization: `Bearer ${currentJwt}` }
   }).then(r => r.json());
-  
+
   currentJwt = newJwt.access_token;
 }, 10 * 60 * 1000);  // 10 minutes
 ```

@@ -139,7 +139,7 @@ graph TB
     System[Multi-Tenant Platform]
     DNS[DNS Provider]
     Registry[Container Registry]
-    
+
     User -->|HTTPS| System
     System -->|Manage| DNS
     System -->|Pull Images| Registry
@@ -154,7 +154,7 @@ sequenceDiagram
     participant PostgreSQL
     participant Redis
     participant Pods
-    
+
     User->>Backend: Update Config
     Backend->>PostgreSQL: UPDATE service_configs
     Backend->>Redis: PUBLISH config:*
