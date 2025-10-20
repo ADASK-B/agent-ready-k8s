@@ -1,0 +1,72 @@
+name: Enforce Image Digests (No :latest)
+
+on:
+  pull_request:
+    paths:
+      - 'helm-charts/**/values*.yaml'
+      - 'app/**/Dockerfile'
+      - 'clusters/base/**/values.yaml'
+
+jobs:
+  check-image-tags:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for :latest or untagged images
+        run: |
+          echo "🔍 Checking for :latest or missing image digests..."
+
+          # Check Helm values files
+          LATEST_IN_HELM=$(grep -r "image:" helm-charts/ --include="values*.yaml" | grep -E ":latest|image:.*[^@]$" || true)
+
+          # Check Dockerfiles
+          LATEST_IN_DOCKER=$(grep -r "^FROM" app/ --include="Dockerfile" | grep -E ":latest|FROM [^:@]+$" || true)
+
+          # Check cluster base values
+          LATEST_IN_CLUSTER=$(grep -r "image:" clusters/base/ --include="*.yaml" | grep -E ":latest|image:.*[^@]$" || true)
+
+          FAIL=0
+
+          if [ -n "$LATEST_IN_HELM" ]; then
+            echo "❌ Found :latest or missing digest in Helm values:"
+            echo "$LATEST_IN_HELM"
+            FAIL=1
+          fi
+
+          if [ -n "$LATEST_IN_DOCKER" ]; then
+            echo "❌ Found :latest or missing tag in Dockerfiles:"
+            echo "$LATEST_IN_DOCKER"
+            FAIL=1
+          fi
+
+          if [ -n "$LATEST_IN_CLUSTER" ]; then
+            echo "❌ Found :latest or missing digest in cluster configs:"
+            echo "$LATEST_IN_CLUSTER"
+            FAIL=1
+          fi
+
+          if [ $FAIL -eq 1 ]; then
+            echo ""
+            echo "📋 Requirements:"
+            echo "  - Helm values: Use image digests (image: repo@sha256:...)"
+            echo "  - Dockerfiles: Pin base image tags (FROM node:20.10.0-alpine)"
+            echo "  - Never use :latest in production manifests"
+            exit 1
+          fi
+
+          echo "✅ All images properly pinned!"
+
+      - name: Check Helm chart versions pinned
+        run: |
+          echo "🔍 Checking Helm chart versions in Chart.yaml..."
+
+          UNPINNED=$(find helm-charts/ -name "Chart.yaml" -exec grep -L "version:" {} \; || true)
+
+          if [ -n "$UNPINNED" ]; then
+            echo "❌ Chart.yaml files without version field:"
+            echo "$UNPINNED"
+            exit 1
+          fi
+
+          echo "✅ All Helm charts have version field!"

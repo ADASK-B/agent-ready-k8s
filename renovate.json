@@ -1,0 +1,124 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    ":semanticCommits",
+    ":separateMultipleMajorReleases"
+  ],
+  "labels": ["dependencies", "renovate"],
+  "assignees": ["@ADASK-B"],
+  "timezone": "Europe/Berlin",
+  "schedule": ["after 6am and before 9pm every weekday"],
+
+  "packageRules": [
+    {
+      "description": "Helm charts: Auto-merge patch updates",
+      "matchDatasources": ["helm"],
+      "matchUpdateTypes": ["patch"],
+      "automerge": true,
+      "automergeType": "pr",
+      "automergeStrategy": "squash"
+    },
+    {
+      "description": "Helm charts: Manual review for minor/major",
+      "matchDatasources": ["helm"],
+      "matchUpdateTypes": ["minor", "major"],
+      "automerge": false,
+      "labels": ["helm-upgrade", "review-required"]
+    },
+    {
+      "description": "Docker images: Pin to digests",
+      "matchDatasources": ["docker"],
+      "pinDigests": true,
+      "automerge": false,
+      "labels": ["docker-update", "review-required"]
+    },
+    {
+      "description": "GitHub Actions: Auto-merge minor/patch",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true,
+      "automergeType": "pr"
+    },
+    {
+      "description": "Terraform providers: Manual review",
+      "matchDatasources": ["terraform-provider"],
+      "automerge": false,
+      "labels": ["terraform-upgrade", "review-required"]
+    },
+    {
+      "description": "Python dependencies: Group updates",
+      "matchManagers": ["pip_requirements"],
+      "groupName": "Python dependencies",
+      "automerge": false,
+      "labels": ["python-deps"]
+    },
+    {
+      "description": "Node.js dependencies: Group updates",
+      "matchManagers": ["npm"],
+      "groupName": "Node.js dependencies",
+      "automerge": false,
+      "labels": ["nodejs-deps"]
+    }
+  ],
+
+  "helm-values": {
+    "fileMatch": ["(^|/)values.*\\.ya?ml$"]
+  },
+
+  "kubernetes": {
+    "fileMatch": [
+      "(^|/)clusters/.*\\.ya?ml$",
+      "(^|/)apps/.*\\.ya?ml$"
+    ]
+  },
+
+  "regexManagers": [
+    {
+      "description": "Update image tags in Helm values files",
+      "fileMatch": ["(^|/)values.*\\.ya?ml$"],
+      "matchStrings": [
+        "image:\\s+repository:\\s+(?<depName>.*?)\\s+tag:\\s+(?<currentValue>.*?)\\s"
+      ],
+      "datasourceTemplate": "docker"
+    },
+    {
+      "description": "Update Kubernetes versions in Terraform",
+      "fileMatch": ["(^|/)infra/terraform/.*\\.tf$"],
+      "matchStrings": [
+        "kubernetes_version\\s*=\\s*\"(?<currentValue>.*?)\""
+      ],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "kubernetes/kubernetes",
+      "extractVersionTemplate": "^v(?<version>.*)$"
+    }
+  ],
+
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["security", "vulnerability"],
+    "assignees": ["@ADASK-B"]
+  },
+
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
+
+  "commitMessagePrefix": "chore(deps):",
+  "commitMessageAction": "update",
+  "commitMessageTopic": "{{depName}}",
+  "commitMessageExtra": "to {{newVersion}}",
+
+  "prTitle": "{{commitMessagePrefix}} {{commitMessageAction}} {{commitMessageTopic}} {{commitMessageExtra}}",
+  "prBodyTemplate": "{{{header}}}{{{table}}}{{{notes}}}{{{changelogs}}}{{{controls}}}{{{footer}}}",
+
+  "ignorePresets": [":prHourlyLimit2"],
+
+  "ignoreDeps": [
+    "kubernetes/kubernetes"
+  ],
+
+  "postUpdateOptions": [
+    "gomodTidy"
+  ]
+}

@@ -129,11 +129,13 @@ Design and operate a **production-ready, security-first, GitOps-driven** Kuberne
 ┌────────────────────────────────────────────────────────────────┐
 │ Infra (Terraform)                                              │
 │  Cloud: VNet/VPC, LB IPs, DNS zones, KMS, Managed Cluster      │
-│  On-Prem: VMs + cloud-init, networks, LB IPs, MinIO, Vault     │
+│  On-Prem/Oracle: VMs + cloud-init, networks, LB IPs, MinIO, Vault │
 └────────────────────────────────────────────────────────────────┘
 ```
 
 **Separation of concerns:** *Infra (Terraform) ⟂ Cluster add-ons (Argo CD) ⟂ Apps*. No cross-layer mixing.
+
+**Infrastructure note:** Oracle Cloud Free Tier follows the **On-Prem** pattern (self-managed VMs + k3s), not the Cloud pattern (managed Kubernetes services).
 
 ---
 
@@ -147,7 +149,7 @@ repo/
 │  │  ├─ aks/
 │  │  ├─ eks/
 │  │  ├─ gke/
-│  │  └─ onprem/
+│  │  └─ onprem/                # Also used for Oracle Cloud Free Tier
 │  └─ bootstrap/                # Argo CD install + root app (via TF null_resource/helm)
 ├─ clusters/
 │  ├─ base/                     # provider-agnostic add-ons (Kustomize bases)
@@ -163,11 +165,17 @@ repo/
 │     ├─ aks/
 │     ├─ eks/
 │     ├─ gke/
-│     └─ onprem/
+│     └─ onprem/                # Self-managed kubeadm (physical or Oracle Cloud)
 └─ apps/                        # environment-agnostic application bases (optionally separate repo)
 ```
 
 **App-of-apps:** A single **root** Argo CD Application points to `clusters/overlays/<provider>/root/` which aggregates all add-ons and tenants.
+
+**Note on `onprem/` overlay:** This overlay is used for **all self-managed Kubernetes deployments**, including:
+* Physical on-premises servers (Raspberry Pi, NUC, datacenter rack servers)
+* **Oracle Cloud Free Tier** (self-managed k3s on Oracle VMs)
+* Home lab setups
+* Any environment where you control the Kubernetes control plane (not AKS/EKS/GKE managed services)
 
 ---
 
@@ -238,7 +246,7 @@ repo/
 | ------------------- | ---------------------- | ------------------------------------------------------------------- | ---------- | ----------------- |
 | Local (kind)        | **GHCR**               | Always                                                              | 0 €        | GitHub PAT        |
 | Cloud (AKS/EKS/GKE) | **GHCR → ACR/ECR/GAR** | Start with GHCR; add native registry for geo-replication/compliance | ~0–10 €/mo | Workload Identity |
-| On-Prem             | **GHCR** or **Harbor** | GHCR if internet; Harbor for air-gapped                             | 0 € (GHCR) | PAT / Basic Auth  |
+| On-Prem / **Oracle Cloud** | **GHCR** or **Harbor** | GHCR if internet; Harbor for air-gapped                       | 0 € (GHCR) | PAT / Basic Auth  |
 
 **Rules:** Pin by **digest**; verify **Cosign** signatures via policy; `${REGISTRY}` variable in bases, set per overlay; pull secret named `registry-credentials` consistently.
 
@@ -246,21 +254,63 @@ repo/
 * **Build:** Use `docker buildx` or `kaniko` to create **multi-arch manifests** (linux/amd64, linux/arm64).
 * **Promotion:** Promote images by **digest** (not tag) to ensure bit-identical binaries across environments; prevents node-arch drift on-prem (mixed AMD/ARM clusters).
 * **Validation:** CI tests run on both AMD64 and ARM64 runners; block merge if either arch fails.
+* **Oracle Cloud note:** Always Free Tier uses **ARM64 only** (Ampere A1); ensure all images include `linux/arm64` architecture.
 
 ---
 
 ## 8) Cluster Options & Decision Guide
 
-| Environment      | Cluster Type | Distribution            | Setup Complexity   | Resources  | Control Plane    |
-| ---------------- | ------------ | ----------------------- | ------------------ | ---------- | ---------------- |
-| Local (dev/test) | Ephemeral    | **kind**                | Low (1 command)    | ~2+ GB RAM | Local Docker     |
-| Cloud (prod)     | Managed      | **AKS/EKS/GKE**         | Medium (Terraform) | Managed    | Provider-managed |
-| On-Prem (prod)   | Self-managed | **kubeadm** or **RKE2** | High               | 4+ GB RAM  | Self-managed     |
+| Environment      | Cluster Type | Distribution            | Setup Complexity   | Resources  | Control Plane    | Cost |
+| ---------------- | ------------ | ----------------------- | ------------------ | ---------- | ---------------- | ---- |
+| Local (dev/test) | Ephemeral    | **kind**                | Low (1 command)    | ~2+ GB RAM | Local Docker     | Free |
+| Cloud (prod)     | Managed      | **AKS/EKS/GKE**         | Medium (Terraform) | Managed    | Provider-managed | $$$ |
+| On-Prem (prod)   | Self-managed | **k3s** or **kubeadm** or **RKE2** | Medium-High | 4+ GB RAM | Self-managed | Hardware cost |
+| **Oracle Cloud Free Tier (prod)** | **Self-managed** | **k3s** (recommended) | **Medium** | **4 ARM CPUs, 24 GB RAM** | **Self-managed** | **Free (forever)** |
 
 **Use kind** for local tests and CI parity.
 **Use managed cloud** when you want a managed control plane & cloud integrations.
-**Use kubeadm** for standard on-prem; **RKE2** for hardened/FIPS contexts.
+**Use Oracle Cloud Free Tier** for production-ready self-managed clusters **without cost** (uses `onprem/` overlay).
+**Use k3s** for lightweight ARM/on-prem setups; **kubeadm** for standard on-prem; **RKE2** for hardened/FIPS contexts.
 All are **CNCF-certified** → API-compatible; app manifests run unchanged.
+
+### 8.1) Oracle Cloud Free Tier Details (Recommended for MVP Production)
+
+**Why Oracle Cloud Free Tier is ideal for this project:**
+* **Self-managed Kubernetes** (full control, no vendor lock-in) using the **same `onprem/` overlay** as physical on-prem.
+* **Always Free resources** (no credit expiration, no surprise billing):
+  * 4x ARM Ampere A1 CPUs (Cortex-A76 equivalent)
+  * 24 GB RAM (split across VMs as needed)
+  * 200 GB Block Storage (for etcd, PVCs, Longhorn)
+  * 2x Public IPv4 addresses (for LoadBalancer services)
+  * 10 TB outbound traffic/month
+* **Production-ready SLA** (~99.9% uptime, Oracle-managed infrastructure).
+* **Same tooling as physical on-prem**: MetalLB, Longhorn/Rook-Ceph, Cilium/Calico, Vault, ExternalDNS.
+
+**Recommended VM layout:**
+```
+Control Plane VM (Master):
+├─ 2 ARM CPUs
+├─ 12 GB RAM
+├─ 100 GB Block Storage
+└─ k3s server (control plane + etcd)
+
+Worker Node VM:
+├─ 2 ARM CPUs
+├─ 12 GB RAM
+├─ 100 GB Block Storage
+└─ k3s agent (application workloads)
+```
+
+**Use cases:**
+* **Phase 4 (MVP Production):** Deploy multi-tenant SaaS for real users without infrastructure cost.
+* **Staging environment:** Persistent staging cluster that mirrors production (unlike ephemeral Codespaces).
+* **Learning/PoC:** Production-grade Kubernetes without commitment.
+
+**Caveats:**
+* **Resource limits:** Cannot scale beyond 4 CPUs/24 GB without paid tier.
+* **ARM architecture only:** Ensure all images support `linux/arm64` (see §7 multi-arch).
+* **Single region:** No built-in multi-region HA (use Velero + object storage for DR).
+* **Account suspension risk:** Oracle may suspend accounts for ToS violations (rare, but document backup strategy).
 
 ---
 
@@ -358,16 +408,18 @@ All are **CNCF-certified** → API-compatible; app manifests run unchanged.
 
 ## 10) Provider Mapping (Compact)
 
-| Component         | AKS                     | EKS                         | GKE                         | On-Prem                           |
-| ----------------- | ----------------------- | --------------------------- | --------------------------- | --------------------------------- |
-| Registry          | GHCR or ACR             | GHCR or ECR                 | GHCR or GAR                 | GHCR or Harbor                    |
-| Ingress/LB        | NGINX/AGIC + Azure LB   | AWS LB Controller (ALB/NLB) | GKE Ingress/Gateway + GCLB  | NGINX/Traefik + **MetalLB**       |
-| CNI               | Azure CNI               | VPC CNI                     | Dataplane V2/Calico         | Cilium/Calico                     |
-| Block storage     | Azure Disk (CSI)        | EBS (CSI)                   | GCE-PD (CSI)                | **Longhorn**/**Rook-Ceph**        |
-| Shared FS         | Azure Files (CSI)       | EFS (CSI)                   | Filestore (CSI)             | NFS/CEPHFS                        |
-| DNS               | Azure DNS (ExternalDNS) | Route 53 (ExternalDNS)      | Cloud DNS (ExternalDNS)     | Internal/Cloudflare (ExternalDNS) |
-| Secrets           | Azure Key Vault (ESO)   | AWS Secrets Manager (ESO)   | Google Secret Manager (ESO) | Vault/Sealed Secrets (via ESO)    |
-| Workload identity | Azure AD WI             | EKS Pod Identity / IRSA     | GKE WI                      | K8s SA ↔ Vault/JWT                |
+| Component         | AKS                     | EKS                         | GKE                         | On-Prem / **Oracle Cloud Free Tier**          |
+| ----------------- | ----------------------- | --------------------------- | --------------------------- | --------------------------------------------- |
+| Registry          | GHCR or ACR             | GHCR or ECR                 | GHCR or GAR                 | **GHCR** or Harbor                            |
+| Ingress/LB        | NGINX/AGIC + Azure LB   | AWS LB Controller (ALB/NLB) | GKE Ingress/Gateway + GCLB  | **NGINX/Traefik + MetalLB** (Oracle Public IP)|
+| CNI               | Azure CNI               | VPC CNI                     | Dataplane V2/Calico         | **Cilium/Calico**                             |
+| Block storage     | Azure Disk (CSI)        | EBS (CSI)                   | GCE-PD (CSI)                | **Longhorn/Rook-Ceph** (Oracle Block Storage) |
+| Shared FS         | Azure Files (CSI)       | EFS (CSI)                   | Filestore (CSI)             | **NFS/CEPHFS** (between VMs)                  |
+| DNS               | Azure DNS (ExternalDNS) | Route 53 (ExternalDNS)      | Cloud DNS (ExternalDNS)     | **Cloudflare/internal** (ExternalDNS)         |
+| Secrets           | Azure Key Vault (ESO)   | AWS Secrets Manager (ESO)   | Google Secret Manager (ESO) | **Vault/Sealed Secrets** (via ESO)            |
+| Workload identity | Azure AD WI             | EKS Pod Identity / IRSA     | GKE WI                      | **K8s SA ↔ Vault/JWT**                        |
+
+**Note:** Oracle Cloud Free Tier uses the **same `onprem/` overlay** as physical on-prem infrastructure. All tools, configurations, and manifests are identical to traditional self-managed Kubernetes deployments.
 
 ### 10.1) High Availability Requirements (per Provider)
 
@@ -1346,5 +1398,3 @@ This document provides **decision-grade guardrails** that keep the platform port
 * [ ] No active service principals or IAM roles.
 * [ ] Archival data accessible only to legal/compliance (MFA + audit).
 * [ ] Decommission report filed with date, approvers, audit trail.
-
-
