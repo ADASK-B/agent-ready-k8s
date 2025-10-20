@@ -1,0 +1,65 @@
+%% Observability Stack Architecture
+
+graph TB
+    subgraph Application Layer
+        Backend[⚙️ Backend Pods]
+        Frontend[🎨 Frontend Pods]
+    end
+    
+    subgraph Metrics Pipeline
+        Backend -->|/metrics| PromScrape[Prometheus<br/>Scrape]
+        Frontend -->|/metrics| PromScrape
+        PromScrape -->|Store| Prometheus[📊 Prometheus<br/>15d Retention]
+        Prometheus -->|Query| Grafana[📈 Grafana<br/>Dashboards]
+        Prometheus -->|Alerts| Alertmanager[🚨 Alertmanager]
+        
+        Prometheus -.->|Optional<br/>Long-term| Mimir[☁️ Mimir/Thanos<br/>Central Storage]
+    end
+    
+    subgraph Logs Pipeline
+        Backend -->|stdout/stderr| Promtail[Promtail<br/>Agent]
+        Frontend -->|stdout/stderr| Promtail
+        Promtail -->|Push| Loki[📝 Loki<br/>30d Retention]
+        Loki -->|Query| Grafana
+    end
+    
+    subgraph Traces Pipeline
+        Backend -->|OTLP| OTelCollector[OpenTelemetry<br/>Collector]
+        Frontend -->|OTLP| OTelCollector
+        OTelCollector -->|Store| Tempo[🔍 Tempo<br/>3d Retention]
+        Tempo -->|Query| Grafana
+        
+        Tempo -.->|Exemplars| Prometheus
+    end
+    
+    subgraph Alerting
+        Alertmanager -->|Route| PagerDuty[📟 PagerDuty<br/>Critical]
+        Alertmanager -->|Route| Slack[💬 Slack<br/>Warning]
+        Alertmanager -->|Route| Email[📧 Email<br/>Info]
+    end
+    
+    subgraph Dashboards
+        Grafana -->|SLO Burn Rate| Dashboard1[📊 SLO Dashboard]
+        Grafana -->|Golden Signals| Dashboard2[📊 RED Dashboard]
+        Grafana -->|Business| Dashboard3[📊 Orgs/Projects]
+    end
+    
+    %% Correlation
+    Grafana -.->|Trace ID| Tempo
+    Grafana -.->|Trace ID| Loki
+    Loki -.->|Trace ID| Tempo
+    
+    %% Styling
+    classDef appStyle fill:#B3E5FC,stroke:#0288D1,stroke-width:2px
+    classDef metricsStyle fill:#81C784,stroke:#388E3C,stroke-width:2px
+    classDef logsStyle fill:#FFE082,stroke:#F57C00,stroke-width:2px
+    classDef tracesStyle fill:#CE93D8,stroke:#8E24AA,stroke-width:2px
+    classDef alertStyle fill:#FFAB91,stroke:#E64A19,stroke-width:2px
+    classDef dashStyle fill:#E8F4F8,stroke:#0288D1,stroke-width:2px
+    
+    class Backend,Frontend appStyle
+    class Prometheus,PromScrape,Mimir metricsStyle
+    class Loki,Promtail logsStyle
+    class Tempo,OTelCollector tracesStyle
+    class Alertmanager,PagerDuty,Slack,Email alertStyle
+    class Grafana,Dashboard1,Dashboard2,Dashboard3 dashStyle

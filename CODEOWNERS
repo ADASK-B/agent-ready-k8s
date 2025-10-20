@@ -1,0 +1,47 @@
+# CODEOWNERS
+# Each line is a file pattern followed by one or more owners.
+# Owners are automatically requested for review when someone opens a pull request.
+
+# Default owners for everything in the repo
+*                           @ADASK-B/platform-team
+
+# Documentation
+/docs/                      @ADASK-B/platform-team @ADASK-B/tech-writers
+/docs/architecture/         @ADASK-B/architects
+/docs/api/                  @ADASK-B/api-team
+/docs/runbooks/             @ADASK-B/sre-team
+
+# Architecture Decision Records
+/docs/adr/                  @ADASK-B/architects
+
+# Infrastructure as Code
+/infra/terraform/           @ADASK-B/platform-team @ADASK-B/sre-team
+/infra/argocd/              @ADASK-B/platform-team
+/infra/helm-charts/         @ADASK-B/platform-team
+/infra/policies/            @ADASK-B/security-team
+
+# Application Code
+/app/backend/               @ADASK-B/backend-team
+/app/frontend/              @ADASK-B/frontend-team
+
+# Database Migrations
+/app/backend/db/migrations/ @ADASK-B/backend-team @ADASK-B/dba-team
+
+# Tools & Scripts
+/tools/                     @ADASK-B/platform-team
+
+# CI/CD Workflows
+/.github/workflows/         @ADASK-B/platform-team @ADASK-B/sre-team
+
+# Security
+/SECURITY.md                @ADASK-B/security-team
+/policies/                  @ADASK-B/security-team
+
+# Root Configuration Files
+/Makefile                   @ADASK-B/platform-team
+/.pre-commit-config.yaml    @ADASK-B/platform-team
+/.gitignore                 @ADASK-B/platform-team
+
+# Observability
+/infra/grafana/             @ADASK-B/sre-team
+/docs/runbooks/             @ADASK-B/sre-team

@@ -1,0 +1,57 @@
+%% Config Hot-Reload Sequence
+
+sequenceDiagram
+    actor Admin as 👤 Admin
+    participant Backend
+    participant PostgreSQL as 💾 PostgreSQL<br/>(Source of Truth)
+    participant Redis as 🔥 Redis Pub/Sub<br/>(Event Channel)
+    participant Pod1 as 🚀 Backend Pod 1
+    participant Pod2 as 🚀 Backend Pod 2
+    participant Pod3 as 🚀 Backend Pod 3
+    
+    Note over Admin,Pod3: Scenario: Update AI Threshold 0.7 → 0.9
+    
+    Admin->>Backend: PUT /api/configs<br/>{ key: "ai_threshold", value: 0.9 }
+    
+    par Write to PostgreSQL (Source of Truth)
+        Backend->>PostgreSQL: UPDATE service_configs<br/>SET value=0.9, version=5<br/>WHERE key='ai_threshold'
+        PostgreSQL-->>Backend: OK
+    and Publish Event to Redis
+        Backend->>Redis: PUBLISH config:ai:threshold<br/>"version=5"
+        Redis-->>Backend: OK
+    end
+    
+    Backend-->>Admin: 200 OK { success: true }
+    
+    Note over Redis,Pod3: Redis broadcasts to ALL subscribed pods
+    
+    par All Pods Receive Event Simultaneously
+        Redis->>Pod1: SUBSCRIBE event<br/>"config:ai:threshold v5"
+        Redis->>Pod2: SUBSCRIBE event<br/>"config:ai:threshold v5"
+        Redis->>Pod3: SUBSCRIBE event<br/>"config:ai:threshold v5"
+    end
+    
+    Note over Pod1,Pod3: Each pod checks version and reloads if newer
+    
+    par Pods Check & Reload
+        Pod1->>Pod1: Local version=4<br/>New version=5<br/>→ Reload!
+        Pod1->>PostgreSQL: SELECT value<br/>WHERE key='ai_threshold'
+        PostgreSQL-->>Pod1: 0.9
+        Pod1->>Pod1: Update in-memory:<br/>threshold = 0.9
+        
+        Pod2->>Pod2: Local version=4<br/>New version=5<br/>→ Reload!
+        Pod2->>PostgreSQL: SELECT value<br/>WHERE key='ai_threshold'
+        PostgreSQL-->>Pod2: 0.9
+        Pod2->>Pod2: Update in-memory:<br/>threshold = 0.9
+        
+        Pod3->>Pod3: Local version=4<br/>New version=5<br/>→ Reload!
+        Pod3->>PostgreSQL: SELECT value<br/>WHERE key='ai_threshold'
+        PostgreSQL-->>Pod3: 0.9
+        Pod3->>Pod3: Update in-memory:<br/>threshold = 0.9
+    end
+    
+    Note over Pod1,Pod3: ✅ All pods updated in < 100ms<br/>No pod restart required!
+    
+    rect rgb(200, 255, 200)
+        Note over Admin,Pod3: Timeline:<br/>0ms: Admin updates config<br/>10ms: PostgreSQL UPDATE + Redis PUBLISH<br/>30ms: All pods receive event<br/>50ms: Pods fetch new value from DB<br/>100ms: All pods apply new config in-memory
+    end

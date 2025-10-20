@@ -1,0 +1,68 @@
+%% Deployment View - CI/CD Pipeline
+
+graph LR
+    subgraph Developer
+        Dev[👨‍💻 Developer]
+    end
+    
+    subgraph Git
+        PR[📝 Pull Request]
+        Main[🌿 main branch]
+    end
+    
+    subgraph CI - GitHub Actions
+        Build[🔨 Build]
+        Test[🧪 Test]
+        Scan[🔍 Trivy Scan]
+        SBOM[📋 SBOM Generation]
+        Sign[✍️ Cosign Sign]
+        Push[📤 Push Image]
+    end
+    
+    subgraph OCI Registry
+        Image[📦 Signed Image<br/>+ SBOM<br/>+ Provenance]
+    end
+    
+    subgraph GitOps
+        Manifest[📄 Update Manifest<br/>Image Digest]
+        ArgoCD[🔄 Argo CD<br/>Auto-Sync]
+    end
+    
+    subgraph Kubernetes
+        Deploy[🚀 Deploy<br/>Rolling Update]
+        Verify[✅ Health Checks<br/>Readiness Probes]
+    end
+    
+    subgraph Admission
+        Policy[🛡️ Kyverno<br/>Verify Signature]
+    end
+    
+    %% Flow
+    Dev -->|git push| PR
+    PR -->|Approved + Merged| Main
+    Main -->|Trigger| Build
+    Build --> Test
+    Test --> Scan
+    Scan -->|No Critical CVEs| SBOM
+    SBOM --> Sign
+    Sign --> Push
+    Push --> Image
+    
+    Image -->|Update| Manifest
+    Manifest -->|Watch| ArgoCD
+    ArgoCD -->|kubectl apply| Deploy
+    Deploy -->|Check| Policy
+    Policy -->|Verify Signature| Verify
+    
+    %% Styling
+    classDef devStyle fill:#E8F4F8,stroke:#0288D1,stroke-width:2px
+    classDef ciStyle fill:#B3E5FC,stroke:#0288D1,stroke-width:2px
+    classDef registryStyle fill:#FFE082,stroke:#F57C00,stroke-width:2px
+    classDef gitopsStyle fill:#CE93D8,stroke:#8E24AA,stroke-width:2px
+    classDef k8sStyle fill:#81C784,stroke:#388E3C,stroke-width:2px
+    
+    class Dev devStyle
+    class Build,Test,Scan,SBOM,Sign,Push ciStyle
+    class Image registryStyle
+    class Manifest,ArgoCD gitopsStyle
+    class Deploy,Verify,Policy k8sStyle

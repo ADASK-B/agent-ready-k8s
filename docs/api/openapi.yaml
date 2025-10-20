@@ -1,0 +1,788 @@
+openapi: 3.1.0
+info:
+  title: Multi-Tenant SaaS Platform API
+  version: 1.0.0
+  description: |
+    REST API for multi-tenant SaaS platform with Organizations, Projects, and Chat.
+    
+    **Authentication:** JWT Bearer token (Guest Sign-In, no registration)
+    **Base URL:** `https://api.platform.example.com`
+    
+    See [API Conventions](conventions.md) for detailed guidelines.
+  contact:
+    name: Platform Team
+    email: platform@example.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.platform.example.com
+    description: Production
+  - url: https://api-staging.platform.example.com
+    description: Staging
+  - url: http://localhost:8000
+    description: Local Development
+
+tags:
+  - name: Auth
+    description: Guest sign-in, logout, token refresh
+  - name: Organizations
+    description: Organization management (multi-tenant root)
+  - name: Projects
+    description: Projects within Organizations
+  - name: Chat
+    description: Real-time chat actions (canned actions only)
+  - name: Configs
+    description: Configuration management (hot-reload)
+  - name: Health
+    description: Health checks, readiness, liveness
+
+security:
+  - bearerAuth: []
+
+paths:
+  # ==========================================
+  # AUTH
+  # ==========================================
+  /api/auth/signin:
+    post:
+      tags: [Auth]
+      summary: Guest Sign-In
+      description: |
+        Sign in as guest (no registration, no PII). Returns JWT with 15-minute TTL.
+        
+        **ADR:** [ADR-0004 Guest Auth](../adr/ADR-0004-guest-auth.md)
+      operationId: guestSignIn
+      security: []  # No auth required for sign-in
+      responses:
+        '200':
+          description: JWT generated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                    example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                  token_type:
+                    type: string
+                    example: "Bearer"
+                  expires_in:
+                    type: integer
+                    description: Seconds until expiration
+                    example: 900
+                  user_id:
+                    type: string
+                    format: uuid
+                    example: "550e8400-e29b-41d4-a716-446655440000"
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+
+  /api/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh JWT
+      description: Exchange current JWT for new JWT (extends session)
+      operationId: refreshToken
+      responses:
+        '200':
+          description: New JWT generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                  expires_in:
+                    type: integer
+                    example: 900
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout (Revoke JWT)
+      description: Add JWT to denylist (revoke token)
+      operationId: logout
+      responses:
+        '204':
+          description: JWT revoked successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ==========================================
+  # ORGANIZATIONS
+  # ==========================================
+  /api/organizations:
+    get:
+      tags: [Organizations]
+      summary: List Organizations
+      description: List all organizations the current user has access to
+      operationId: listOrganizations
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Organizations retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Organization'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Organizations]
+      summary: Create Organization
+      description: Create a new organization (multi-tenant root)
+      operationId: createOrganization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  minLength: 3
+                  maxLength: 100
+                  example: "Acme Corp"
+                description:
+                  type: string
+                  maxLength: 500
+                  example: "Main organization for Acme products"
+      responses:
+        '201':
+          description: Organization created
+          headers:
+            Location:
+              schema:
+                type: string
+              description: URL of created resource
+              example: "/api/organizations/550e8400-e29b-41d4-a716-446655440000"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/organizations/{org_id}:
+    get:
+      tags: [Organizations]
+      summary: Get Organization
+      operationId: getOrganization
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: Organization retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags: [Organizations]
+      summary: Update Organization
+      operationId: updateOrganization
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 3
+                  maxLength: 100
+                description:
+                  type: string
+                  maxLength: 500
+      responses:
+        '200':
+          description: Organization updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Organizations]
+      summary: Delete Organization
+      description: Soft-delete organization (sets deleted_at)
+      operationId: deleteOrganization
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '204':
+          description: Organization deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ==========================================
+  # PROJECTS
+  # ==========================================
+  /api/organizations/{org_id}/projects:
+    get:
+      tags: [Projects]
+      summary: List Projects
+      operationId: listProjects
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Projects retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Project'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+
+    post:
+      tags: [Projects]
+      summary: Create Project
+      operationId: createProject
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  minLength: 3
+                  maxLength: 100
+                  example: "Backend Refactor"
+                description:
+                  type: string
+                  maxLength: 500
+      responses:
+        '201':
+          description: Project created
+          headers:
+            Location:
+              schema:
+                type: string
+              example: "/api/organizations/{org_id}/projects/7c9e6679-7425-40de-944b-e07fc1f90ae7"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+
+  /api/projects/{project_id}:
+    get:
+      tags: [Projects]
+      summary: Get Project
+      operationId: getProject
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: Project retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+
+    patch:
+      tags: [Projects]
+      summary: Update Project
+      operationId: updateProject
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+      responses:
+        '200':
+          description: Project updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+
+    delete:
+      tags: [Projects]
+      summary: Delete Project
+      operationId: deleteProject
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '204':
+          description: Project deleted
+
+  # ==========================================
+  # CHAT
+  # ==========================================
+  /api/projects/{project_id}/chat/actions:
+    post:
+      tags: [Chat]
+      summary: Send Chat Action
+      description: |
+        Send a canned chat action (no free text allowed).
+        
+        **ADR:** [ADR-0005 Canned Chat](../adr/ADR-0005-canned-chat.md)
+      operationId: sendChatAction
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action:
+                  type: string
+                  enum:
+                    - "👍"
+                    - "👎"
+                    - "Ready"
+                    - "Blocked"
+                    - "In Review"
+                    - "Deployed"
+                    - "Tests Green"
+                    - "Rollback"
+                  example: "Ready"
+      responses:
+        '200':
+          description: Action sent (published to WebSocket subscribers)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "sent"
+                  timestamp:
+                    type: string
+                    format: date-time
+        '400':
+          description: Invalid action
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error_code: "INVALID_ACTION"
+                message: "Action must be one of: 👍, 👎, Ready, Blocked, In Review, Deployed, Tests Green, Rollback"
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+
+  # WebSocket endpoint (documented separately)
+  # ws://localhost:8000/ws/projects/{project_id}/chat?token=<jwt>
+
+  # ==========================================
+  # CONFIGS
+  # ==========================================
+  /api/configs:
+    get:
+      tags: [Configs]
+      summary: List Configs
+      description: |
+        List all service configs (AI thresholds, feature flags, quotas).
+        
+        **ADR:** [ADR-0001 Config SoT SQL](../adr/ADR-0001-config-sot-sql.md)
+      operationId: listConfigs
+      parameters:
+        - name: service
+          in: query
+          schema:
+            type: string
+          example: "backend"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Configs retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Config'
+
+  /api/configs/{key}:
+    get:
+      tags: [Configs]
+      summary: Get Config
+      operationId: getConfig
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "ai.threshold"
+      responses:
+        '200':
+          description: Config retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Config'
+
+    put:
+      tags: [Configs]
+      summary: Update Config (Hot-Reload)
+      description: |
+        Update config value. Triggers hot-reload via Redis Pub/Sub (<100ms).
+        
+        **ADR:** [ADR-0002 Hot-Reload Redis](../adr/ADR-0002-hot-reload-redis.md)
+      operationId: updateConfig
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [value]
+              properties:
+                value:
+                  type: string
+                  example: "0.85"
+      responses:
+        '200':
+          description: Config updated (hot-reload triggered)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Config'
+
+  # ==========================================
+  # HEALTH
+  # ==========================================
+  /health:
+    get:
+      tags: [Health]
+      summary: Health Check
+      description: Simple health check (200 = alive)
+      operationId: healthCheck
+      security: []  # No auth required
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+
+  /health/ready:
+    get:
+      tags: [Health]
+      summary: Readiness Check
+      description: K8s readiness probe (checks DB, Redis)
+      operationId: readinessCheck
+      security: []
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ready"
+                  checks:
+                    type: object
+                    properties:
+                      database:
+                        type: string
+                        example: "ok"
+                      redis:
+                        type: string
+                        example: "ok"
+        '503':
+          description: Service not ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "not_ready"
+                  checks:
+                    type: object
+                    properties:
+                      database:
+                        type: string
+                        example: "error"
+                      redis:
+                        type: string
+                        example: "ok"
+
+# ==========================================
+# COMPONENTS
+# ==========================================
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT from /api/auth/signin (Guest Sign-In)
+
+  parameters:
+    OrgId:
+      name: org_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      example: "550e8400-e29b-41d4-a716-446655440000"
+
+    ProjectId:
+      name: project_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      example: "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+
+  schemas:
+    Organization:
+      type: object
+      required: [org_id, name, created_at, updated_at]
+      properties:
+        org_id:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        name:
+          type: string
+          example: "Acme Corp"
+        description:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          example: "2025-10-20T12:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+
+    Project:
+      type: object
+      required: [project_id, org_id, name, created_at, updated_at]
+      properties:
+        project_id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "Backend Refactor"
+        description:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Config:
+      type: object
+      required: [key, value, service, version, updated_at]
+      properties:
+        key:
+          type: string
+          example: "ai.threshold"
+        value:
+          type: string
+          example: "0.85"
+        service:
+          type: string
+          example: "backend"
+        version:
+          type: integer
+          description: Incremented on each update (for hot-reload)
+          example: 5
+        updated_at:
+          type: string
+          format: date-time
+
+    Pagination:
+      type: object
+      properties:
+        limit:
+          type: integer
+          example: 20
+        offset:
+          type: integer
+          example: 0
+        total:
+          type: integer
+          example: 100
+
+    Error:
+      type: object
+      required: [error_code, message]
+      properties:
+        error_code:
+          type: string
+          example: "VALIDATION_ERROR"
+        message:
+          type: string
+          example: "Invalid request body"
+        details:
+          type: object
+          additionalProperties: true
+
+  responses:
+    BadRequest:
+      description: Bad Request (validation error)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error_code: "VALIDATION_ERROR"
+            message: "Invalid request body"
+            details:
+              field: "name"
+              issue: "must be at least 3 characters"
+
+    Unauthorized:
+      description: Unauthorized (missing or invalid JWT)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error_code: "UNAUTHORIZED"
+            message: "JWT invalid or expired"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error_code: "NOT_FOUND"
+            message: "Organization not found"
+
+    Conflict:
+      description: Conflict (duplicate resource)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error_code: "CONFLICT"
+            message: "Organization with name 'Acme Corp' already exists"
+
+    RateLimitExceeded:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error_code: "RATE_LIMIT_EXCEEDED"
+            message: "Too many requests. Try again in 60 seconds."
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Seconds until rate limit resets
+          example: 60

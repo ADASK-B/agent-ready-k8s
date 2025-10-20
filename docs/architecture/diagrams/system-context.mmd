@@ -1,0 +1,38 @@
+%% System Context Diagram (C4 Level 1)
+%% Multi-Tenant SaaS Platform - System Context
+
+graph TB
+    subgraph External Users
+        User[👤 User<br/>Guest Sign-In]
+        Admin[👤 Admin<br/>Platform Operator]
+    end
+    
+    subgraph Multi-Tenant Platform
+        System[🏢 Multi-Tenant SaaS<br/>Org → Projects → Chat]
+    end
+    
+    subgraph External Systems
+        DNS[🌐 DNS Provider<br/>Azure DNS / Route 53]
+        Registry[📦 Container Registry<br/>GHCR / ACR / ECR]
+        Git[📚 Git Repository<br/>GitHub / GitLab]
+        KMS[🔐 Secrets Store<br/>Key Vault / AWS SM]
+    end
+    
+    %% User Interactions
+    User -->|HTTPS<br/>Web/API| System
+    Admin -->|kubectl/Argo CD<br/>GitOps| System
+    
+    %% External System Interactions
+    System -->|Manage DNS<br/>ExternalDNS| DNS
+    System -->|Pull Images<br/>Signed & Verified| Registry
+    System -->|Fetch Secrets<br/>ESO| KMS
+    Git -->|GitOps Sync<br/>Argo CD| System
+    
+    %% Styling
+    classDef userStyle fill:#E8F4F8,stroke:#0288D1,stroke-width:2px
+    classDef systemStyle fill:#81C784,stroke:#388E3C,stroke-width:3px
+    classDef externalStyle fill:#FFE082,stroke:#F57C00,stroke-width:2px
+    
+    class User,Admin userStyle
+    class System systemStyle
+    class DNS,Registry,Git,KMS externalStyle
