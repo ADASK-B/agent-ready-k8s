@@ -61,11 +61,34 @@ if kubectl get namespace tenant-demo >/dev/null 2>&1; then
     echo ""
     exit 0
   fi
-  
+
   log_info "Uninstalling existing podinfo..."
   helm uninstall podinfo -n tenant-demo || true
   kubectl delete namespace tenant-demo --timeout=60s || true
   log_success "Existing deployment removed"
+fi
+
+# Vendor podinfo Helm chart (no external dependencies!)
+log_info "Vendoring podinfo Helm chart v6.9.2..."
+PROJECT_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+CHART_DIR="${PROJECT_ROOT}/helm-charts/infrastructure/podinfo"
+
+if [ ! -d "$CHART_DIR" ]; then
+  log_info "Downloading podinfo chart from stefanprodan/podinfo..."
+
+  # Add repo temporarily (only for download)
+  helm repo add podinfo https://stefanprodan.github.io/podinfo 2>&1 | grep -v "already exists" || true
+  helm repo update 2>&1 | grep -v "Hang tight" || true
+
+  # Download and extract chart
+  mkdir -p "${PROJECT_ROOT}/helm-charts/infrastructure"
+  cd "${PROJECT_ROOT}/helm-charts/infrastructure"
+  helm pull podinfo/podinfo --version 6.9.2 --untar
+
+  log_success "podinfo chart vendored to helm-charts/infrastructure/podinfo/"
+  log_info "Chart is now part of our repository (no external dependency!)"
+else
+  log_success "Using vendored podinfo chart from helm-charts/infrastructure/podinfo/"
 fi
 
 # Create namespace
@@ -74,17 +97,11 @@ kubectl create namespace tenant-demo
 kubectl label namespace tenant-demo tenant=demo
 log_success "Namespace created with label 'tenant=demo'"
 
-# Add Helm repository
-log_info "Adding podinfo Helm repository..."
-helm repo add podinfo https://stefanprodan.github.io/podinfo 2>&1 | grep -v "already exists" || true
-helm repo update 2>&1 | grep -v "Hang tight" || true
-log_success "Helm repository added"
-
-# Deploy podinfo
-log_info "Deploying podinfo v6.9.2 (2 replicas, connected to Redis)..."
-helm install podinfo podinfo/podinfo \
+# Deploy podinfo from LOCAL chart
+log_info "Deploying podinfo v6.9.2 from LOCAL chart (2 replicas, connected to Redis)..."
+cd "$PROJECT_ROOT"
+helm install podinfo ./helm-charts/infrastructure/podinfo/ \
   --namespace tenant-demo \
-  --version 6.9.2 \
   --set replicaCount=2 \
   --set redis.enabled=false \
   --set cache="redis-master.demo-platform:6379" \
@@ -95,7 +112,7 @@ helm install podinfo podinfo/podinfo \
   --set ingress.hosts[0].paths[0].pathType=Prefix \
   --wait \
   --timeout 3m
-log_success "podinfo deployed (connected to Redis)"
+log_success "podinfo deployed from LOCAL chart (no external dependency!)"
 
 # Wait for pods to be ready
 log_info "Waiting for podinfo pods to be ready..."
@@ -127,7 +144,7 @@ if ! grep -q "demo.localhost" /etc/hosts 2>/dev/null; then
   echo "  ℹ️  This requires sudo access to modify /etc/hosts"
   echo "  ℹ️  Adding: 127.0.0.1 demo.localhost"
   echo ""
-  
+
   if sudo bash -c 'echo "127.0.0.1 demo.localhost" >> /etc/hosts'; then
     echo -e "${GREEN}✓ Added demo.localhost to /etc/hosts${RESET}"
   else

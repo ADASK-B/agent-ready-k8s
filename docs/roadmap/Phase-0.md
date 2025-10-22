@@ -88,18 +88,25 @@
 - [x] Document access credentials
 
 ### Block 8: podinfo Demo Application Deployment ✅
+- [x] **Vendor podinfo Helm chart** (self-contained, no external dependencies)
+  - [x] Download podinfo chart v6.9.2: `helm pull podinfo/podinfo --version 6.9.2 --untar`
+  - [x] Store in repository: `helm-charts/infrastructure/podinfo/`
+  - [x] Verify chart files (Chart.yaml, values.yaml, templates/)
 - [x] Create tenant-demo namespace with label
-- [x] Add podinfo Helm repository
-- [x] Deploy podinfo v6.9.2 via Helm
+- [x] Deploy podinfo v6.9.2 **from LOCAL chart** (not external repo!)
+  - [x] Use local chart: `helm install podinfo ./helm-charts/infrastructure/podinfo/`
   - [x] Configure 2 replicas
   - [x] Connect to Redis (redis-master.demo-platform:6379)
-  - [x] Set Redis password
+  - [x] Set Redis password via cache parameter
 - [x] Create Ingress for demo.localhost
 - [x] Wait for podinfo pods to be ready
 - [x] Verify Helm release status
 - [x] Validate pod count and readiness
 - [x] Verify service ClusterIP
 - [x] Validate Ingress configuration
+
+**Result:** podinfo chart vendored at `helm-charts/infrastructure/podinfo/` (27 files, ~20KB)
+**No external dependencies:** Works offline, air-gapped, full control
 
 ### Phase 0 Completion Tasks
 - [x] Run complete Phase 0 setup (setup-phase0.sh)
