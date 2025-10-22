@@ -19,7 +19,7 @@ A **complete enterprise reference implementation** for building **multi-tenant S
 
 ---
 
-## 📐 Repository Structure (Enterprise-Grade, Provider-Portable)
+## 📐 Repository Structure (Provider-Portable)
 
 > **Key Concept:** `clusters/` = **Provider** overlays (AKS/EKS/GKE/Oracle/on-prem), `apps/` = **Environment** overlays (dev/staging/prod), `helm-charts/` = Application definitions.
 
