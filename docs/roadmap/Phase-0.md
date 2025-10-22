@@ -123,8 +123,6 @@
 
 ## 📦 Phase 0 Git Commit Strategy
 
-**Commit:** `9fb1b38` - "feat(phase0): vendor podinfo chart for GitOps foundation"
-
 ### What Was Committed (And Why)
 
 | Path/File | Committed? | Reason |
