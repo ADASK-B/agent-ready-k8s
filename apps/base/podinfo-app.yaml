@@ -13,7 +13,7 @@ spec:
     path: helm-charts/infrastructure/podinfo
     helm:
       values: |
-        replicaCount: 3
+        replicaCount: 2
         ingress:
           enabled: true
           className: nginx
