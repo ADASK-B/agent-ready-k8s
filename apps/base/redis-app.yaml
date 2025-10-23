@@ -14,7 +14,7 @@ spec:
     helm:
       values: |
         image:
-          tag: "7-debian-12"
+          tag: "latest"
         auth:
           password: redispass
         architecture: standalone
