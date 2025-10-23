@@ -1,0 +1,53 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ingress-nginx
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/ADASK-B/agent-ready-k8s
+    targetRevision: main
+    path: helm-charts/infrastructure/ingress-nginx
+    helm:
+      values: |
+        controller:
+          service:
+            type: NodePort
+            nodePorts:
+              http: 30080
+              https: 30443
+          hostPort:
+            enabled: true
+            ports:
+              http: 80
+              https: 443
+          publishService:
+            enabled: false
+          extraArgs:
+            publish-status-address: localhost
+          updateStrategy:
+            type: RollingUpdate
+            rollingUpdate:
+              maxUnavailable: 1
+          admissionWebhooks:
+            enabled: true
+            patch:
+              enabled: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ingress-nginx
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

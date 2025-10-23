@@ -1,0 +1,45 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: podinfo
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/ADASK-B/agent-ready-k8s
+    targetRevision: main
+    path: helm-charts/infrastructure/podinfo
+    helm:
+      values: |
+        replicaCount: 2
+        ingress:
+          enabled: true
+          className: nginx
+          hosts:
+            - host: demo.localhost
+              paths:
+                - path: /
+                  pathType: Prefix
+        cache: redis-master.demo-platform:6379
+        redis:
+          enabled: false
+        ui:
+          color: "#34577c"
+          message: "GitOps Demo App"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: tenant-demo
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
