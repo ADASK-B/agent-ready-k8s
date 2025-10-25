@@ -397,19 +397,19 @@ See [SECURITY.md](SECURITY.md) for vulnerability reporting, threat model, break-
 
 ## 🎯 Project Phases & Roadmap
 
-| Phase | Status | Deliverables | Duration | Notes |
-|-------|--------|-------------|----------|-------|
-| **Phase 0** | ✅ **Complete** | kind cluster, PostgreSQL, Redis, Argo CD, NGINX Ingress, Kyverno policies | 2-3 days | Foundation MVP (65/65 tests passed) |
-| **Phase 1** | 🔜 **Next** | Backend API (Orgs, Projects, Auth, Config Hot-Reload), DB migrations (RLS), Integration tests | 2-3 weeks | Core business logic |
-| **Phase 2** | 📅 Planned | Frontend (React/Next.js), Org/Project dashboards, E2E tests (Playwright) | 2 weeks | User interface |
-| **Phase 3** | 📅 Planned | Chat (WebSocket, canned actions, ≤3 active/user, ephemeral), Redis Pub/Sub fan-out | 1-2 weeks | Real-time features |
-| **Phase 4** | 📅 Planned | **Production deployment** (Oracle Cloud Free Tier OR AKS/EKS/GKE), Terraform modules, DNS setup | 1 week | Go-live MVP |
-| **Phase 5** | 📅 Future | Observability hardening (central Mimir, SLO dashboards), secrets rotation automation | 1-2 weeks | Operational maturity |
-| **Phase 6** | 📅 Future | Security hardening (ESO → Vault, image scanning gates, SLSA attestations) | 1 week | Compliance-ready |
-| **Phase 7** | 📅 Future | DR drills automation, backup verification, incident response runbooks | 1 week | Disaster recovery |
-| **Phase 8+** | 📅 Future | AI chat assistant (replace canned actions), OIDC/SSO, multi-region, scale-out | Ongoing | Feature enhancements |
+| Phase | Status | Deliverables | Notes |
+|-------|--------|-------------|-------|
+| **Phase 0** | ✅ **Complete** | Local template foundation: kind cluster, PostgreSQL, Redis, Argo CD, ingress, baseline policies | Foundation MVP (65/65 tests passed) |
+| **Phase 1** | ✅ **Complete** | GitOps transformation: vendored charts, Argo CD app-of-apps, auto-sync/self-heal validation | Platform now fully declarative |
+| **Phase 2** | 🔜 **Next** | Backend API + DB migrations (Orgs, Projects, Auth, config hot-reload contracts), unit/integration tests | Establish core domain services |
+| **Phase 3** | 📅 Planned | Frontend shell, tenant dashboards, canned chat UI, Playwright smoke tests | Deliver end-user experience |
+| **Phase 4** | 📅 Planned | Real-time chat backend (WS/SSE fan-out), config hot-reload enforcement, Redis scaling patterns | Close chat & hot-reload MVP |
+| **Phase 5** | 📅 Planned | Production rollout (Oracle Free Tier), Terraform modules, DNS/ACME automation | Go-live readiness |
+| **Phase 6** | 📅 Future | Observability & security hardening (kube-prom stack, alerting, ESO→Vault, image signing gates) | Operational maturity |
+| **Phase 7** | 📅 Future | DR & compliance: Velero drills, backup verification, incident response playbooks | Resilience & governance |
+| **Phase 8+** | 📅 Future | AI chat assistant, OIDC/SSO, multi-region overlays, cost guardrails | Feature & scale enhancements |
 
-**Current Focus:** Phase 1 – Backend API development (starting next).
+**Current Focus:** Phase 2 – Backend/API foundation.
 
 ---
 
