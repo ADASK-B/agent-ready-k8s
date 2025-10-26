@@ -400,7 +400,7 @@ See [SECURITY.md](SECURITY.md) for vulnerability reporting, threat model, break-
 | Phase | Status | Deliverables | Notes |
 |-------|--------|-------------|-------|
 | **Phase 0** | ✅ **Complete** | Local template foundation: kind cluster, PostgreSQL, Redis, Argo CD, ingress, baseline policies | Foundation MVP (65/65 tests passed) |
-| **Phase 1** | ✅ **Complete** | GitOps transformation: vendored charts, Argo CD app-of-apps, auto-sync/self-heal validation | Platform now fully declarative |
+| **Phase 1** | ✅ **Complete** | GitOps transformation: vendored charts, Argo CD app-of-apps, auto-sync/self-heal validation | Platform now fully declarative (completed 2025-10-26) |
 | **Phase 2** | 🔜 **Next** | Backend API + DB migrations (Orgs, Projects, Auth, config hot-reload contracts), unit/integration tests | Establish core domain services |
 | **Phase 3** | 📅 Planned | Frontend shell, tenant dashboards, canned chat UI, Playwright smoke tests | Deliver end-user experience |
 | **Phase 4** | 📅 Planned | Real-time chat backend (WS/SSE fan-out), config hot-reload enforcement, Redis scaling patterns | Close chat & hot-reload MVP |
