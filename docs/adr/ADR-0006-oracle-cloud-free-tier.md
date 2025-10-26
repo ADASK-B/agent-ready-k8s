@@ -45,7 +45,7 @@ We will use **Oracle Cloud Free Tier** as the **production MVP platform** (Phase
 | **Resources** | ✅ **4 ARM CPUs, 24 GB RAM, 200 GB storage** (sufficient for MVP) | Raspberry Pi: ~$500 hardware, no SLA<br>Home lab: power outages, slow upload |
 | **Control** | ✅ **Self-managed kubeadm** (root access, no restrictions) | AKS/EKS/GKE: Managed control plane (vendor lock-in)<br>PaaS: No Kubernetes access |
 | **Portability** | ✅ Uses **`onprem/` overlay** (identical to physical on-prem) | Managed K8s: requires cloud-specific overlays (`aks/eks/gke/`) |
-| **Reliability** | ✅ **~99.9% SLA** (Oracle datacenter infrastructure) | Raspberry Pi: no SLA, single point of failure<br>Home lab: ISP outages, no backup power |
+| **Reliability** | ⚠️ **NO SLA** (Free Tier = best-effort, Oracle may reclaim instances) | Raspberry Pi: no SLA, single point of failure<br>Home lab: ISP outages, no backup power |
 | **User Access** | ✅ **2 static public IPs + 10 TB/month traffic** | Home lab: DynDNS, port forwarding, slow upload<br>Codespaces: 60h limit, ephemeral |
 
 ### Why NOT Managed Kubernetes (AKS/EKS/GKE)?
@@ -275,6 +275,22 @@ spec:
 - ❌ Managed only: Cannot learn self-managed Kubernetes
 
 **Decision:** Rejected (use for scale-out in Phase 5+, not MVP).
+
+---
+
+## Risk Assessment
+
+**Oracle Always Free Tier Limitations:**
+- ❌ **No SLA** - Oracle provides no uptime guarantee ("AS-IS" service)
+- ❌ **Reclaim Risk** - Oracle may reclaim instances for paid customers without notice
+- ⚠️ **Best-Effort Only** - Suitable for demo/reference implementation, not business-critical production
+
+**Acceptable for MVP because:**
+- ✅ Project goal: Prove architecture & GitOps patterns ($0 cost during development)
+- ✅ Users can choose paid tier ($100/mo with 99.95% SLA) or managed K8s for production workloads
+- ✅ Reference implementation - not a managed SaaS service
+
+**Production Upgrade Path:** Oracle PAYG (~$100/mo, 99.95% SLA) or AKS/EKS/GKE - see ARCHITECTURE.md § 2 for SLA requirements.
 
 ---
 

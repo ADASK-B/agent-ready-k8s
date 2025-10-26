@@ -404,7 +404,7 @@ See [SECURITY.md](SECURITY.md) for vulnerability reporting, threat model, break-
 | **Phase 2** | 🔜 **Next** | Backend API + DB migrations (Orgs, Projects, Auth, config hot-reload contracts), unit/integration tests | Establish core domain services |
 | **Phase 3** | 📅 Planned | Frontend shell, tenant dashboards, canned chat UI, Playwright smoke tests | Deliver end-user experience |
 | **Phase 4** | 📅 Planned | Real-time chat backend (WS/SSE fan-out), config hot-reload enforcement, Redis scaling patterns | Close chat & hot-reload MVP |
-| **Phase 5** | 📅 Planned | Production rollout (Oracle Free Tier), Terraform modules, DNS/ACME automation | Go-live readiness |
+| **Phase 5** | 📅 Planned | MVP rollout (Oracle Free Tier), Terraform modules, DNS/ACME automation | Demo/reference implementation (no SLA) |
 | **Phase 6** | 📅 Future | Observability & security hardening (kube-prom stack, alerting, ESO→Vault, image signing gates) | Operational maturity |
 | **Phase 7** | 📅 Future | DR & compliance: Velero drills, backup verification, incident response playbooks | Resilience & governance |
 | **Phase 8+** | 📅 Future | AI chat assistant, OIDC/SSO, multi-region overlays, cost guardrails | Feature & scale enhancements |

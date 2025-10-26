@@ -283,7 +283,7 @@ All are **CNCF-certified** → API-compatible; app manifests run unchanged.
   * 200 GB Block Storage (for etcd, PVCs, Longhorn)
   * 2x Public IPv4 addresses (for LoadBalancer services)
   * 10 TB outbound traffic/month
-* **Production-ready SLA** (~99.9% uptime, Oracle-managed infrastructure).
+* **⚠️ NO SLA** (Free Tier = best-effort, Oracle may reclaim instances) - suitable for demo/reference implementation. For production with uptime requirements, use Oracle Paid Tier ($100/mo, 99.95% SLA) or managed K8s (AKS/EKS/GKE).
 * **Same tooling as physical on-prem**: MetalLB, Longhorn/Rook-Ceph, Cilium/Calico, Vault, ExternalDNS.
 
 **Recommended VM layout:**
@@ -423,11 +423,11 @@ Worker Node VM:
 
 ### 10.1) High Availability Requirements (per Provider)
 
-| Requirement | AKS | EKS | GKE | On-Prem (kubeadm/RKE2) |
-|-------------|-----|-----|-----|------------------------|
-| **Min Nodes/AZ** | ≥ 2 per AZ (≥ 6 total for 3 AZs) | ≥ 2 per AZ (≥ 6 total) | ≥ 2 per Zone (≥ 6 total) | ≥ 3 nodes across failure domains (rack/switch/power) |
-| **Control Plane SLA** | 99.95% (multi-AZ) / 99.9% (single-AZ) | 99.95% (multi-AZ) | 99.95% (regional) / 99.5% (zonal) | Self-managed (target 99.9% via etcd quorum) |
-| **PodDisruptionBudget** | `minAvailable: 2` for critical add-ons | `minAvailable: 2` | `minAvailable: 2` | `minAvailable: 2` (or 50% if ≥ 4 replicas) |
+| Requirement | AKS | EKS | GKE | On-Prem (kubeadm/RKE2) | **Oracle Cloud Free Tier** |
+|-------------|-----|-----|-----|------------------------|----------------------------|
+| **Min Nodes/AZ** | ≥ 2 per AZ (≥ 6 total for 3 AZs) | ≥ 2 per AZ (≥ 6 total) | ≥ 2 per Zone (≥ 6 total) | ≥ 3 nodes across failure domains (rack/switch/power) | **2 nodes only** (resource limit) |
+| **Control Plane SLA** | 99.95% (multi-AZ) / 99.9% (single-AZ) | 99.95% (multi-AZ) | 99.95% (regional) / 99.5% (zonal) | Self-managed (target 99.9% via etcd quorum) | **NO SLA** (best-effort, demo/ref only) |
+| **PodDisruptionBudget** | `minAvailable: 2` for critical add-ons | `minAvailable: 2` | `minAvailable: 2` | `minAvailable: 2` (or 50% if ≥ 4 replicas) | `minAvailable: 1` (limited resources) |
 | **Anti-Affinity** | `topologyKey: topology.kubernetes.io/zone` | `topologyKey: topology.kubernetes.io/zone` | `topologyKey: topology.kubernetes.io/zone` | `topologyKey: kubernetes.io/hostname` (nodes) + rack labels if available |
 | **PriorityClass** | `system-cluster-critical` (add-ons), `high-priority` (workloads) | Same | Same | Same |
 | **Node Autoscaling** | Cluster Autoscaler or KEDA | Cluster Autoscaler / Karpenter | GKE Autopilot / Cluster Autoscaler | Manual or custom autoscaler (Cluster API) |
