@@ -97,6 +97,35 @@
   > Login to Argo CD UI and verify all 4 Applications are green (Synced + Healthy) with correct pod counts
   > **SKIPPED:** CLI validation sufficient for Phase 1
 
+### Block 6: Migrate Tenant Overlays (Flux → Kustomize) ✅
+- [x] Analyze current apps/podinfo/ structure
+  > Identified old Flux HelmRelease artifacts in apps/podinfo/tenants/demo/ requiring migration to Kustomize
+  > **COMPLETE:** Base structure already exists (deployment.yaml, service.yaml, hpa.yaml, kustomization.yaml)
+- [x] Create apps/podinfo/base/ Kustomize structure
+  > Base already exists with deployment.yaml, service.yaml, hpa.yaml - generic manifests without tenant-specific config
+  > **COMPLETE:** Verified base manifests are properly structured
+- [x] Create apps/podinfo/base/kustomization.yaml
+  > Base kustomization.yaml already exists, defines resources: [hpa.yaml, deployment.yaml, service.yaml]
+  > **COMPLETE:** Base kustomization validated
+- [x] Create apps/podinfo/tenants/demo/ingress.yaml (separate resource)
+  > Created standalone Ingress file (moved from patch.yaml) - patchesStrategicMerge can't create new resources
+  > **COMPLETE:** ingress.yaml created with demo.localhost host, nginx ingressClassName, podinfo service backend
+- [x] Update apps/podinfo/tenants/demo/kustomization.yaml
+  > Changed from deprecated 'patchesStrategicMerge' to modern 'patches:' syntax with target selector
+  > **COMPLETE:** Added ingress.yaml to resources, switched to patches with target: Deployment/podinfo
+- [x] Update apps/podinfo/tenants/demo/patch.yaml
+  > Removed Ingress definition, kept only Deployment replica patch (replicas: 2)
+  > **COMPLETE:** Patch now only contains Deployment spec.replicas modification
+- [x] Validate tenant overlay builds
+  > Run: kubectl kustomize apps/podinfo/tenants/demo - verify no errors, Ingress appears in output
+  > **COMPLETE:** Build successful, generates Service + Deployment (2 replicas) + HPA + Ingress (demo.localhost)
+- [x] Test tenant overlay on cluster (optional)
+  > Skipped - current deployment uses HELM chart (apps/base/podinfo-app.yaml), Kustomize overlay ready for Phase 2+
+  > **SKIPPED:** Not needed, overlay validated via kustomize build
+- [x] Commit Kustomize-based tenant structure
+  > Git commit cleaned-up tenant overlays - ready for multi-tenancy (Oracle Cloud, Phase 2+)
+  > **COMPLETE:** All changes committed (ingress.yaml created, kustomization.yaml + patch.yaml updated)
+
 ### Phase 1 Completion Criteria ✅
 - [x] All 4 services managed by Argo CD (0 Helm releases)
 - [x] Repository structure matches README.md
