@@ -1,6 +1,11 @@
 # Testing Strategy
 
-> **Status:** Draft - Phase 2 work
+> **⚠️ STATUS: DRAFT - Phase 2 work**
+>
+> This document will define our testing approach once we begin backend/frontend development in Phase 2+.
+> **Action Required:** Populate with specific tooling (pytest, k6, Playwright) and quality gates when implementing Phase 2 features.
+
+---
 
 ## Purpose
 

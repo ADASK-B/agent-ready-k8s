@@ -1,5 +1,13 @@
 # Runbook: Config Hot-Reload Troubleshooting
 
+> **⚠️ STATUS: ACTIVE (with placeholders)**
+>
+> This runbook is usable for debugging config hot-reload issues.
+> **Note:** Namespace references use `<namespace>` placeholders. Replace with your actual namespace (e.g., `demo-platform`, `tenant-acme`).
+> **Action Required:** Once namespace strategy is finalized, replace all `<namespace>` placeholders.
+
+---
+
 > **Purpose:** Debug and resolve config hot-reload issues (PostgreSQL + Redis Pub/Sub).
 >
 > **Audience:** SRE, Backend Engineers, On-Call
@@ -33,7 +41,7 @@
 
 ```bash
 # Verify config was written to DB
-kubectl exec -it postgresql-0 -n default -- psql -U postgres -d demo-platform -c \
+kubectl exec -it postgresql-0 -n <namespace> -- psql -U postgres -d demo-platform -c \
   "SELECT key, value, version, updated_at FROM service_configs WHERE key='ai.threshold';"
 ```
 
@@ -54,7 +62,7 @@ kubectl exec -it postgresql-0 -n default -- psql -U postgres -d demo-platform -c
 
 ```bash
 # Subscribe to config channel (listen for events)
-kubectl exec -it redis-0 -n default -- redis-cli SUBSCRIBE "config:*"
+kubectl exec -it redis-0 -n <namespace> -- redis-cli SUBSCRIBE "config:*"
 
 # In another terminal, trigger config update
 curl -X PUT https://api.platform.example.com/api/configs/ai.threshold \
@@ -77,7 +85,7 @@ curl -X PUT https://api.platform.example.com/api/configs/ai.threshold \
 
 ```bash
 # Check backend logs for hot-reload event
-kubectl logs -n default backend-7c9e6679-abc12 --tail=100 | grep "config"
+kubectl logs -n <namespace> backend-7c9e6679-abc12 --tail=100 | grep "config"
 
 # Expected log:
 # [INFO] Config hot-reload: ai.threshold version=5
@@ -122,7 +130,7 @@ curl https://api.platform.example.com/health | jq '.config_versions'
 
 ```bash
 # Measure Redis latency
-kubectl exec -it redis-0 -n default -- redis-cli --latency
+kubectl exec -it redis-0 -n <namespace> -- redis-cli --latency
 
 # Expected: <10ms
 # If >100ms: Redis overloaded or network issue
@@ -138,7 +146,7 @@ kubectl exec -it redis-0 -n default -- redis-cli --latency
 
 ```bash
 # Check query duration
-kubectl exec -it postgresql-0 -n default -- psql -U postgres -d demo-platform -c \
+kubectl exec -it postgresql-0 -n <namespace> -- psql -U postgres -d demo-platform -c \
   "SELECT key, value FROM service_configs WHERE key='ai.threshold';"
 
 # Expected: <50ms
@@ -160,7 +168,7 @@ CREATE INDEX CONCURRENTLY idx_service_configs_key ON service_configs(key);
 **Check:**
 ```bash
 # Count Redis Pub/Sub subscribers
-kubectl exec -it redis-0 -n default -- redis-cli PUBSUB NUMSUB "config:*"
+kubectl exec -it redis-0 -n <namespace> -- redis-cli PUBSUB NUMSUB "config:*"
 
 # Expected: <100 subscribers
 # If >1000: Redis may be slow
@@ -182,9 +190,9 @@ kubectl exec -it redis-0 -n default -- redis-cli PUBSUB NUMSUB "config:*"
 
 ```bash
 # Check Redis connection per pod
-for pod in $(kubectl get pods -n default -l app=backend -o name); do
+for pod in $(kubectl get pods -n <namespace> -l app=backend -o name); do
   echo "=== $pod ==="
-  kubectl exec -n default $pod -- sh -c "redis-cli -h redis PING"
+  kubectl exec -n <namespace> $pod -- sh -c "redis-cli -h redis PING"
 done
 
 # Expected: All pods return "PONG"
@@ -203,7 +211,7 @@ Reconcile loop (every 5-10 min) should detect version drift and fetch from Postg
 
 ```bash
 # Check reconcile loop logs
-kubectl logs -n default backend-7c9e6679-abc12 --tail=100 | grep "reconcile"
+kubectl logs -n <namespace> backend-7c9e6679-abc12 --tail=100 | grep "reconcile"
 
 # Expected (every 10 minutes):
 # [INFO] Reconcile loop: Checking version drift
@@ -227,13 +235,13 @@ kubectl logs -n default backend-7c9e6679-abc12 --tail=100 | grep "reconcile"
 **Fix:**
 ```bash
 # Check Redis pod
-kubectl get pods -n default -l app=redis
+kubectl get pods -n <namespace> -l app=redis
 
 # If CrashLoopBackOff:
-kubectl logs -n default redis-0 --tail=100
+kubectl logs -n <namespace> redis-0 --tail=100
 
 # Restart Redis
-kubectl delete pod redis-0 -n default
+kubectl delete pod redis-0 -n <namespace>
 ```
 
 **Mitigation:** Reconcile loop will fetch from PostgreSQL (fallback).
@@ -248,7 +256,7 @@ kubectl delete pod redis-0 -n default
 **Fix:**
 ```bash
 # Manually trigger reconcile (restart pod)
-kubectl delete pod backend-7c9e6679-abc12 -n default
+kubectl delete pod backend-7c9e6679-abc12 -n <namespace>
 
 # Or wait for reconcile loop (runs every 10 minutes)
 ```
@@ -269,7 +277,7 @@ abs(config_version{key="ai.threshold", source="local"} - config_version{key="ai.
 **Fix:**
 ```bash
 # List all config keys
-kubectl exec -it postgresql-0 -n default -- psql -U postgres -d demo-platform -c \
+kubectl exec -it postgresql-0 -n <namespace> -- psql -U postgres -d demo-platform -c \
   "SELECT key FROM service_configs ORDER BY key;"
 
 # Update correct key
@@ -288,7 +296,7 @@ curl -X PUT https://api.platform.example.com/api/configs/ai.threshold \
 **Debug:**
 ```bash
 # Monitor all Redis Pub/Sub channels
-kubectl exec -it redis-0 -n default -- redis-cli PSUBSCRIBE "*"
+kubectl exec -it redis-0 -n <namespace> -- redis-cli PSUBSCRIBE "*"
 
 # Trigger config update, check channel name in output
 ```
@@ -345,10 +353,10 @@ annotations:
 
 ```bash
 # Backend logs (config hot-reload events)
-kubectl logs -n default -l app=backend --tail=100 | grep "config"
+kubectl logs -n <namespace> -l app=backend --tail=100 | grep "config"
 
 # Redis logs (Pub/Sub activity)
-kubectl logs -n default redis-0 | grep PUBLISH
+kubectl logs -n <namespace> redis-0 | grep PUBLISH
 ```
 
 ---
@@ -359,7 +367,7 @@ kubectl logs -n default redis-0 | grep PUBLISH
 
 ```bash
 # 1. Subscribe to Redis Pub/Sub (monitor events)
-kubectl exec -it redis-0 -n default -- redis-cli SUBSCRIBE "config:*"
+kubectl exec -it redis-0 -n <namespace> -- redis-cli SUBSCRIBE "config:*"
 
 # 2. Update config via API
 curl -X PUT https://api.platform.example.com/api/configs/ai.threshold \
@@ -373,7 +381,7 @@ curl -X PUT https://api.platform.example.com/api/configs/ai.threshold \
 # 3) "version=6"
 
 # 4. Check backend pod logs
-kubectl logs -n default backend-7c9e6679-abc12 --tail=10 | grep "ai.threshold"
+kubectl logs -n <namespace> backend-7c9e6679-abc12 --tail=10 | grep "ai.threshold"
 
 # Expected:
 # [INFO] Config hot-reload: ai.threshold version=6
@@ -386,13 +394,13 @@ kubectl logs -n default backend-7c9e6679-abc12 --tail=10 | grep "ai.threshold"
 
 ```bash
 # 1. Manually update PostgreSQL (bypass API)
-kubectl exec -it postgresql-0 -n default -- psql -U postgres -d demo-platform -c \
+kubectl exec -it postgresql-0 -n <namespace> -- psql -U postgres -d demo-platform -c \
   "UPDATE service_configs SET value='0.88', version=version+1 WHERE key='ai.threshold';"
 
 # 2. Wait 10 minutes (reconcile loop interval)
 
 # 3. Check backend pod logs
-kubectl logs -n default backend-7c9e6679-abc12 --tail=10 | grep "reconcile"
+kubectl logs -n <namespace> backend-7c9e6679-abc12 --tail=10 | grep "reconcile"
 
 # Expected:
 # [INFO] Reconcile loop: ai.threshold drift detected (local=6, db=7)
@@ -406,7 +414,7 @@ kubectl logs -n default backend-7c9e6679-abc12 --tail=10 | grep "reconcile"
 
 ```bash
 # 1. Stop Redis
-kubectl scale statefulset redis -n default --replicas=0
+kubectl scale statefulset redis -n <namespace> --replicas=0
 
 # 2. Update config via API (should still work)
 curl -X PUT https://api.platform.example.com/api/configs/ai.threshold \
@@ -414,14 +422,14 @@ curl -X PUT https://api.platform.example.com/api/configs/ai.threshold \
   -d '{"value": "0.77"}'
 
 # 3. Check backend logs (no Redis Pub/Sub, but reconcile loop should fetch)
-kubectl logs -n default backend-7c9e6679-abc12 --tail=10 | grep "reconcile"
+kubectl logs -n <namespace> backend-7c9e6679-abc12 --tail=10 | grep "reconcile"
 
 # Expected (after 10 minutes):
 # [INFO] Reconcile loop: ai.threshold drift detected
 # [INFO] Updated in-memory config: ai.threshold = 0.77
 
 # 4. Restart Redis
-kubectl scale statefulset redis -n default --replicas=1
+kubectl scale statefulset redis -n <namespace> --replicas=1
 ```
 
 ---
@@ -434,7 +442,7 @@ kubectl scale statefulset redis -n default --replicas=1
 
 ```bash
 # Option 1: Restart all backend pods (rolling restart)
-kubectl rollout restart deployment backend -n default
+kubectl rollout restart deployment backend -n <namespace>
 
 # Option 2: Trigger reconcile loop manually (if exposed in API)
 curl -X POST https://api.platform.example.com/admin/reconcile \
@@ -449,15 +457,15 @@ curl -X POST https://api.platform.example.com/admin/reconcile \
 
 ```bash
 # 1. Check config history
-kubectl exec -it postgresql-0 -n default -- psql -U postgres -d demo-platform -c \
+kubectl exec -it postgresql-0 -n <namespace> -- psql -U postgres -d demo-platform -c \
   "SELECT version, value, updated_at FROM config_history WHERE key='ai.threshold' ORDER BY version DESC LIMIT 5;"
 
 # 2. Rollback to previous version
-kubectl exec -it postgresql-0 -n default -- psql -U postgres -d demo-platform -c \
+kubectl exec -it postgresql-0 -n <namespace> -- psql -U postgres -d demo-platform -c \
   "UPDATE service_configs SET value='0.75', version=version+1 WHERE key='ai.threshold';"
 
 # 3. Publish Redis event (trigger hot-reload)
-kubectl exec -it redis-0 -n default -- redis-cli PUBLISH "config:ai:threshold" "version=8"
+kubectl exec -it redis-0 -n <namespace> -- redis-cli PUBLISH "config:ai:threshold" "version=8"
 
 # 4. Verify all pods updated
 curl https://api.platform.example.com/health | jq '.config_versions'

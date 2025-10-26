@@ -35,6 +35,8 @@
 
 ### Current Baseline
 
+> **Note:** These checkboxes will be filled during Phase 2+ when security features are fully implemented and validated.
+
 - [ ] Image signing (Cosign)
 - [ ] SBOM generation (Syft/Trivy)
 - [ ] Vulnerability scanning (Trivy)

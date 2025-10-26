@@ -1,558 +1,233 @@
-# Local Development Setup
+# Local Development Guide
 
-> **Purpose:** Run the full stack locally (kind cluster + PostgreSQL + Redis + Backend + Frontend).
->
-> **Audience:** Developers
->
-> **Related:** [PHASE0-SETUP.md](PHASE0-SETUP.md), [Boot-Routine.md](Boot-Routine.md)
+## Overview
+
+This repository uses **GitOps** principles: everything is declared in Git, and Argo CD automatically syncs changes to your local Kubernetes cluster.
 
 ---
 
 ## Prerequisites
 
-Before starting, complete [PHASE0-SETUP.md](../../setup-template/phase0-template-foundation/PHASE0-SETUP.md):
-- ✅ Docker (24.0+)
-- ✅ kind (0.20+)
-- ✅ kubectl (1.28+)
-- ✅ Helm (3.12+)
-- ✅ Argo CD CLI (2.8+)
-- ✅ kind cluster running (`kind get clusters` → `kind`)
+Install these tools before starting:
+
+| Tool | Purpose | Why Needed | Installation |
+|------|---------|------------|--------------|
+| **Docker** | Container runtime | Run kind cluster | [docker.com](https://docs.docker.com/get-docker/) |
+| **kind** | Local Kubernetes | Development cluster | `brew install kind` or [kind.sigs.k8s.io](https://kind.sigs.k8s.io/docs/user/quick-start/) |
+| **kubectl** | K8s CLI | Interact with cluster | `brew install kubectl` or [kubernetes.io](https://kubernetes.io/docs/tasks/tools/) |
+| **Helm** | Package manager | Install charts | `brew install helm` or [helm.sh](https://helm.sh/docs/intro/install/) |
+| **Argo CD CLI** | GitOps tool | Manage applications | `brew install argocd` or [argo-cd.readthedocs.io](https://argo-cd.readthedocs.io/en/stable/cli_installation/) |
+| **Git** | Version control | Clone repo | Pre-installed on most systems |
+
+**Optional but recommended:**
+- **k9s** - Terminal UI for Kubernetes: `brew install k9s`
+- **kubectx/kubens** - Switch contexts/namespaces: `brew install kubectx`
 
 ---
 
-## Quick Start (10 Minutes)
+## Tech Stack
 
-### 1. Clone Repository
-
-```bash
-git clone https://github.com/example/agent-ready-k8s.git
-cd agent-ready-k8s
-```
-
----
-
-### 2. Run Phase 0 Setup (If Not Done)
-
-```bash
-cd setup-template/phase0-template-foundation
-./dev-kind-up.sh
-
-# Wait for all services (3-4 minutes)
-# ✅ kind cluster created
-# ✅ PostgreSQL running
-# ✅ Redis running
-# ✅ Argo CD running
-# ✅ NGINX Ingress running
-```
-
-**Verify:**
-```bash
-kubectl get pods -n default
-# Should show: postgresql-0, redis-0, podinfo-*
-
-kubectl get pods -n argocd
-# Should show: argocd-server-*, argocd-repo-server-*
-```
-
----
-
-### 3. Add `/etc/hosts` Entries
-
-```bash
-# Add local domains
-echo "127.0.0.1 argocd.local" | sudo tee -a /etc/hosts
-echo "127.0.0.1 podinfo.local" | sudo tee -a /etc/hosts
-echo "127.0.0.1 api.platform.local" | sudo tee -a /etc/hosts
-echo "127.0.0.1 app.platform.local" | sudo tee -a /etc/hosts
-```
-
-**Verify:**
-```bash
-curl http://podinfo.local
-# Should return: {"hostname":"podinfo-..."}
-```
-
----
-
-### 4. Run Backend (Python)
-
-```bash
-cd app/backend
-
-# Create virtual environment
-python3 -m venv venv
-source venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Set environment variables
-export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/demo-platform"
-export REDIS_URL="redis://localhost:6379/0"
-export JWT_SECRET="dev-secret-key-change-in-production"
-
-# Port-forward PostgreSQL & Redis
-kubectl port-forward -n default postgresql-0 5432:5432 &
-kubectl port-forward -n default redis-0 6379:6379 &
-
-# Run migrations
-alembic upgrade head
-
-# Start backend
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
-```
-
-**Verify:**
-```bash
-curl http://localhost:8000/health
-# {"status":"ok"}
-
-curl http://localhost:8000/health/ready
-# {"status":"ready","checks":{"database":"ok","redis":"ok"}}
-```
-
----
-
-### 5. Run Frontend (React/Next.js)
-
-```bash
-cd app/frontend
-
-# Install dependencies
-npm install
-
-# Set environment variables
-export NEXT_PUBLIC_API_URL="http://localhost:8000"
-
-# Start dev server
-npm run dev
-```
-
-**Verify:**
-Open http://localhost:3000 in browser.
+| Component | Technology | Purpose | Why This Choice |
+|-----------|-----------|---------|-----------------|
+| **Kubernetes** | kind (local) | Container orchestration | Industry standard, local dev with kind is fast |
+| **GitOps** | Argo CD | Declarative deployments | Audit trail, rollback, drift detection |
+| **Ingress** | NGINX Ingress | External access | Stable, well-documented, works everywhere |
+| **Database** | PostgreSQL | Persistent data | ACID compliance, SQL, proven reliability |
+| **Cache** | Redis | Hot-reload, Pub/Sub | Fast, simple, widely supported |
+| **Registry** | GHCR/Harbor | Image storage | Free (GHCR), self-hosted option (Harbor) |
+| **IaC** | Terraform | Infrastructure provisioning | State management, cloud-agnostic |
 
 ---
 
 ## Development Workflow
 
-### A. Database Migrations
-
-#### Create New Migration
+### 1. Clone Repository
 
 ```bash
-cd app/backend
-source venv/bin/activate
-
-# Auto-generate migration from model changes
-alembic revision --autogenerate -m "Add user_roles table"
-
-# Review generated migration
-cat alembic/versions/abc123_add_user_roles_table.py
+git clone https://github.com/ADASK-B/agent-ready-k8s.git
+cd agent-ready-k8s
 ```
 
-#### Apply Migration
+### 2. Start Local Cluster
 
 ```bash
-alembic upgrade head
+# Create kind cluster (see setup-template/phase0-template-foundation/)
+kind create cluster --config kind-config.yaml
+
+# Verify cluster
+kubectl cluster-info
+kubectl get nodes
 ```
 
-#### Rollback Migration
+### 3. Deploy Infrastructure via GitOps
 
 ```bash
-alembic downgrade -1  # Rollback 1 step
+# Install Argo CD
+kubectl create namespace argocd
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+
+# Wait for Argo CD
+kubectl wait --for=condition=available --timeout=300s deployment/argocd-server -n argocd
+
+# Apply root application (app-of-apps pattern)
+kubectl apply -f argocd/root-app.yaml
+
+# Access Argo CD UI
+kubectl port-forward svc/argocd-server -n argocd 8080:443
+# Open: https://localhost:8080
+# User: admin
+# Password: kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath="{.data.password}" | base64 -d
 ```
 
----
-
-### B. Seed Demo Data
+### 4. Make Changes (GitOps Flow)
 
 ```bash
-cd tools/scripts
-./seed-demo-data.sh
+# 1. Edit manifests
+vim apps/podinfo/base/deployment.yaml
 
-# Creates:
-# - 2 Organizations (Acme Corp, Beta LLC)
-# - 5 Projects per org
-# - 10 Users
-# - 100 Config entries
-```
+# 2. Commit changes
+git add apps/podinfo/
+git commit -m "feat: update podinfo replicas to 3"
 
-**Verify:**
-```bash
-kubectl exec -it postgresql-0 -n default -- psql -U postgres -d demo-platform -c \
-  "SELECT count(*) FROM organizations;"
-# Should return: 2
-```
+# 3. Push to Git
+git push origin main
 
----
-
-### C. Testing
-
-#### Unit Tests (Backend)
-
-```bash
-cd app/backend
-source venv/bin/activate
-
-# Run all tests
-pytest
-
-# Run specific test
-pytest tests/test_organizations.py
-
-# Run with coverage
-pytest --cov=. --cov-report=html
-open htmlcov/index.html
-```
-
-#### Integration Tests (Backend)
-
-```bash
-# Start Testcontainers (PostgreSQL + Redis)
-pytest tests/integration/
-
-# Testcontainers auto-starts/stops containers
-```
-
-#### E2E Tests (Playwright)
-
-```bash
-cd tests/e2e
-
-# Install Playwright
-npm install
-npx playwright install
-
-# Run E2E tests
-npx playwright test
-
-# Run in headed mode (see browser)
-npx playwright test --headed
-
-# Run specific test
-npx playwright test tests/auth.spec.ts
-```
-
----
-
-### D. Hot-Reload Testing
-
-#### Test Config Hot-Reload
-
-```bash
-# Terminal 1: Subscribe to Redis Pub/Sub
-kubectl exec -it redis-0 -n default -- redis-cli SUBSCRIBE "config:*"
-
-# Terminal 2: Update config via API
-curl -X PUT http://localhost:8000/api/configs/ai.threshold \
-  -H "Authorization: Bearer $JWT" \
-  -H "Content-Type: application/json" \
-  -d '{"value": "0.99"}'
-
-# Terminal 1: Should show:
-# 1) "message"
-# 2) "config:ai:threshold"
-# 3) "version=5"
-```
-
----
-
-### E. Debugging
-
-#### Backend (Python)
-
-```python
-# Add breakpoint in code
-import pdb; pdb.set_trace()
-
-# Or use VS Code debugger
-# .vscode/launch.json:
-{
-  "version": "0.2.0",
-  "configurations": [
-    {
-      "name": "Backend (Uvicorn)",
-      "type": "python",
-      "request": "launch",
-      "module": "uvicorn",
-      "args": ["main:app", "--reload"],
-      "env": {
-        "DATABASE_URL": "postgresql://postgres:postgres@localhost:5432/demo-platform",
-        "REDIS_URL": "redis://localhost:6379/0"
-      }
-    }
-  ]
-}
-```
-
-#### Frontend (React)
-
-```javascript
-// Add debugger statement
-debugger;
-
-// Or use Chrome DevTools
-// F12 → Sources → Set breakpoint
-```
-
----
-
-## Common Commands
-
-### PostgreSQL
-
-```bash
-# Connect to PostgreSQL
-kubectl exec -it postgresql-0 -n default -- psql -U postgres -d demo-platform
-
-# List tables
-\dt
-
-# Describe table
-\d organizations
-
-# Run query
-SELECT * FROM organizations LIMIT 10;
-
-# Exit
-\q
-```
-
----
-
-### Redis
-
-```bash
-# Connect to Redis
-kubectl exec -it redis-0 -n default -- redis-cli
-
-# Get all keys
-KEYS *
-
-# Get value
-GET config:ai:threshold
-
-# Subscribe to channel
-SUBSCRIBE config:*
-
-# Publish event
-PUBLISH config:ai:threshold "version=5"
-
-# Exit
-exit
-```
-
----
-
-### Argo CD
-
-```bash
-# Login (password from Phase 0 output)
-argocd login argocd.local --insecure
-
-# List apps
-argocd app list
-
-# Sync app
+# 4. Argo CD syncs automatically (or manual sync)
 argocd app sync podinfo
+```
 
-# View app details
+---
+
+## Common Tasks
+
+### View All Applications
+
+```bash
+kubectl get applications -n argocd
+```
+
+### Check Application Status
+
+```bash
 argocd app get podinfo
 ```
 
----
-
-### Logs
+### Sync Application Manually
 
 ```bash
-# Backend logs
-kubectl logs -n default -l app=backend --tail=100 -f
+argocd app sync podinfo --prune
+```
 
-# PostgreSQL logs
-kubectl logs -n default postgresql-0 --tail=100 -f
+### Access Services Locally
 
-# Redis logs
-kubectl logs -n default redis-0 --tail=100 -f
+```bash
+# PostgreSQL
+kubectl port-forward svc/postgresql -n demo-platform 5432:5432
 
+# Redis
+kubectl port-forward svc/redis -n demo-platform 6379:6379
+
+# Podinfo
+kubectl port-forward svc/podinfo -n demo-platform 9898:9898
+```
+
+### View Logs
+
+```bash
 # Argo CD logs
-kubectl logs -n argocd -l app.kubernetes.io/name=argocd-server --tail=100 -f
+kubectl logs -n argocd deployment/argocd-application-controller
+
+# Application logs
+kubectl logs -n demo-platform deployment/podinfo -f
 ```
 
----
-
-## Troubleshooting
-
-### "Port already in use"
-
-**Symptom:** `uvicorn` fails with "Address already in use"
-**Fix:**
-```bash
-# Find process using port 8000
-lsof -i :8000
-
-# Kill process
-kill -9 <PID>
-```
-
----
-
-### "Database connection refused"
-
-**Symptom:** Backend logs show "connection refused"
-**Fix:**
-```bash
-# Check PostgreSQL pod
-kubectl get pods -n default -l app=postgresql
-
-# Port-forward PostgreSQL
-kubectl port-forward -n default postgresql-0 5432:5432
-
-# Test connection
-psql -h localhost -U postgres -d demo-platform -c "SELECT 1;"
-```
-
----
-
-### "Redis connection timeout"
-
-**Symptom:** Backend logs show "redis.exceptions.TimeoutError"
-**Fix:**
-```bash
-# Check Redis pod
-kubectl get pods -n default -l app=redis
-
-# Port-forward Redis
-kubectl port-forward -n default redis-0 6379:6379
-
-# Test connection
-redis-cli -h localhost PING
-```
-
----
-
-### "Frontend can't connect to backend"
-
-**Symptom:** Browser console shows "CORS error" or "Network error"
-**Fix:**
-```bash
-# Verify backend CORS config (backend/main.py)
-# Should include: origins=["http://localhost:3000"]
-
-# Verify backend running
-curl http://localhost:8000/health
-
-# Check NEXT_PUBLIC_API_URL
-echo $NEXT_PUBLIC_API_URL
-# Should be: http://localhost:8000
-```
-
----
-
-## IDE Setup
-
-### VS Code (Recommended)
-
-#### Extensions
-
-Install:
-- Python (ms-python.python)
-- Pylance (ms-python.vscode-pylance)
-- ESLint (dbaeumer.vscode-eslint)
-- Prettier (esbenp.prettier-vscode)
-- Docker (ms-azuretools.vscode-docker)
-- Kubernetes (ms-kubernetes-tools.vscode-kubernetes-tools)
-
-#### Workspace Settings
-
-```json
-// .vscode/settings.json
-{
-  "python.defaultInterpreterPath": "${workspaceFolder}/app/backend/venv/bin/python",
-  "python.linting.enabled": true,
-  "python.linting.pylintEnabled": true,
-  "python.formatting.provider": "black",
-  "editor.formatOnSave": true,
-  "editor.codeActionsOnSave": {
-    "source.organizeImports": true
-  }
-}
-```
-
----
-
-### PyCharm
-
-#### Project Setup
-
-1. File → Open → Select `agent-ready-k8s/`
-2. Configure Python interpreter: `app/backend/venv/bin/python`
-3. Mark `app/backend` as "Sources Root"
-4. Enable `pytest` as test runner
-
----
-
-## Performance Tips
-
-### A. Skip Tests for Fast Iteration
+### Troubleshooting
 
 ```bash
-# Run backend without tests
-uvicorn main:app --reload
-```
+# Check pod status
+kubectl get pods -A
 
-### B. Use Docker Compose (Alternative to kind)
+# Describe failing pod
+kubectl describe pod <pod-name> -n <namespace>
 
-```yaml
-# docker-compose.yml
-version: '3.8'
-services:
-  postgres:
-    image: postgres:16
-    environment:
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: demo-platform
-    ports:
-      - "5432:5432"
-
-  redis:
-    image: redis:7
-    ports:
-      - "6379:6379"
-```
-
-```bash
-docker-compose up -d
+# Check events
+kubectl get events -n <namespace> --sort-by='.lastTimestamp'
 ```
 
 ---
 
-### C. Use `entr` for Auto-Reload (Backend)
+## Directory Structure (Key Files)
+
+```
+agent-ready-k8s/
+├── apps/                          # Application manifests
+│   ├── base/                      # Base Argo CD Applications
+│   └── <service>/                 # Per-service configs
+├── clusters/                      # Environment configs
+│   └── local/                     # Local cluster overlay
+├── helm-charts/infrastructure/    # Vendored Helm charts
+│   ├── ingress-nginx/
+│   ├── postgresql/
+│   └── redis/
+├── argocd/                        # Argo CD setup
+│   └── root-app.yaml              # App-of-apps entry point
+└── setup-template/                # Phase-specific setup scripts
+    └── phase0-template-foundation/
+```
+
+---
+
+## Best Practices
+
+### GitOps Principles
+
+1. **Git is Source of Truth** - All changes via Git commits
+2. **Declarative** - Describe desired state, not steps
+3. **Automated Sync** - Argo CD handles deployment
+4. **Version Control** - Every change is auditable
+
+### Local Development
+
+- ✅ Use `kubectl apply -k` to test Kustomize locally before pushing
+- ✅ Run `helm template` to preview chart output
+- ✅ Use `argocd app diff` to see what will change
+- ❌ Avoid manual `kubectl apply` for managed resources
+- ❌ Don't commit secrets (use sealed secrets or External Secrets Operator)
+
+### Testing Changes
 
 ```bash
-# Install entr (macOS)
-brew install entr
+# 1. Render manifests locally
+kustomize build apps/podinfo/base
 
-# Auto-reload on file change
-find app/backend -name "*.py" | entr -r uvicorn main:app --reload
+# 2. Validate with kubeconform
+kustomize build apps/podinfo/base | kubeconform --strict
+
+# 3. Apply to test namespace
+kubectl create namespace test
+kustomize build apps/podinfo/base | kubectl apply -n test -f -
+
+# 4. Clean up
+kubectl delete namespace test
 ```
 
 ---
 
 ## Next Steps
 
-After local dev setup:
-- [ ] Read [ARCHITECTURE.md](../architecture/ARCHITECTURE.md) for design decisions
-- [ ] Review [ADRs](../adr/) for context on key choices
-- [ ] Check [API docs](../api/openapi.yaml) for endpoint specs
-- [ ] Run [testing-strategy.md](../architecture/testing-strategy.md) test suite
-- [ ] Deploy to staging (see `infra/terraform/`)
+- **Phase-specific setup:** See `setup-template/phase*/` for detailed phase instructions
+- **Architecture:** See `docs/architecture/ARCHITECTURE.md` for design decisions
+- **Runbooks:** See `docs/runbooks/` for operational procedures
 
 ---
 
-## References
+## Quick Reference
 
-- [Phase 0 Setup](../../setup-template/phase0-template-foundation/PHASE0-SETUP.md)
-- [Boot Routine](Boot-Routine.md)
-- [Architecture Docs](../architecture/)
-- [API Docs](../api/)
-- [Runbooks](../runbooks/)
+| Task | Command |
+|------|---------|
+| List all apps | `kubectl get applications -n argocd` |
+| Sync app | `argocd app sync <app-name>` |
+| View app status | `argocd app get <app-name>` |
+| Port-forward service | `kubectl port-forward svc/<service> -n <namespace> <local-port>:<remote-port>` |
+| View logs | `kubectl logs -n <namespace> deployment/<name> -f` |
+| Restart deployment | `kubectl rollout restart deployment/<name> -n <namespace>` |

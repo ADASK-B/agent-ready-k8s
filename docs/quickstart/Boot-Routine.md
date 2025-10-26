@@ -1,89 +1,130 @@
-# Boot Routine - agent-ready-k8s
+# After Reboot Checklist
 
-**Goal:** Verify system operational after reboot.
-**Policy:** Idempotent checks; 3× retry on failure (5s backoff), else STOP with error log.
-
----
-
-## Preconditions
-- Network & DNS reachable
-- Docker active: `docker ps || sudo systemctl start docker`
-- Repo exists: `git -C /home/arthur/Dev/agent-ready-k8s rev-parse`
+> **When to use:** After system restart, Docker restart, or cluster recreation.
 
 ---
 
-## 1) Check Container
-```bash
-docker ps | grep agent-k8s-local
-```
-**If not running:**
-```bash
-docker start agent-k8s-local-control-plane
-```
+## Quick Verification (2 minutes)
 
----
+### 1. Check Cluster
 
-## 2) Verify Cluster
 ```bash
+# Cluster running?
+kubectl cluster-info
+
+# Nodes ready?
 kubectl get nodes
-# Expected: NAME=agent-k8s-local-control-plane, STATUS=Ready
 ```
+
+**Expected:** Cluster responds, nodes `Ready`.
 
 ---
 
-## 3) Verify Pods
+### 2. Check Core Services
+
 ```bash
-kubectl get pods -A --field-selector=status.phase!=Running
-# Expected: No resources found (all Running)
-```
-
----
-
-## 4) Test Endpoints
-```bash
-curl -o /dev/null -w "%{http_code}\n" http://argocd.local
-curl -o /dev/null -w "%{http_code}\n" http://demo.localhost
-# Expected: Both return 200
-```
-
----
-
-## Troubleshooting
-
-**Container not found:**
-```bash
-# Check if cluster exists
-kind get clusters
-# Expected: agent-k8s-local
-
-# If missing, run full setup
-cd /home/arthur/Dev/agent-ready-k8s
-./setup-template/phase0-template-foundation/setup-phase0.sh
-```
-
-**Pods not Running:**
-```bash
-# Wait 30s for pod initialization
-sleep 30
+# All pods running?
 kubectl get pods -A
-
-# Check specific pod logs
-kubectl logs -n <namespace> <pod>
 ```
 
-**Endpoints return 502/Connection Refused:**
-```bash
-# Wait for ingress controller
-kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=ingress-nginx -n ingress-nginx --timeout=60s
+**Expected:** All pods `Running` or `Completed`.
 
-# Check ingress status
-kubectl get ingress -A
+**If stuck in `Pending` or `CrashLoopBackOff`:**
+
+```bash
+# Check what's wrong
+kubectl describe pod <pod-name> -n <namespace>
+
+# Check events
+kubectl get events -A --sort-by='.lastTimestamp' | tail -20
 ```
 
 ---
 
-## Policy Notes
-- All commands **idempotent** (safe to re-run)
-- Container auto-starts with Docker
-- Pods auto-restart after reboot
-- On persistent failure → See [Phase 0 Setup Guide](../../setup-template/phase0-template-foundation/PHASE0-SETUP.md)
+### 3. Check Argo CD
+
+```bash
+# Argo CD healthy?
+kubectl get pods -n argocd
+
+# Applications synced?
+kubectl get applications -n argocd
+```
+
+**Expected:**
+- Argo CD pods `Running`
+- Applications `Synced` + `Healthy`
+
+**If degraded:**
+
+```bash
+# Force sync
+argocd app sync <app-name> --prune
+```
+
+---
+
+## Common Issues
+
+### Issue: Cluster not responding
+
+```bash
+# Check Docker
+docker ps
+
+# Restart kind cluster
+kind delete cluster
+kind create cluster --config kind-config.yaml
+```
+
+---
+
+### Issue: Pods stuck `Pending`
+
+**Cause:** PersistentVolumes not bound after reboot.
+
+```bash
+# Check PVCs
+kubectl get pvc -A
+
+# If "Pending", delete and let Argo CD recreate
+kubectl delete pvc <pvc-name> -n <namespace>
+argocd app sync <app-name>
+```
+
+---
+
+### Issue: Ingress not working
+
+```bash
+# Check ingress-nginx
+kubectl get pods -n ingress-nginx
+
+# Restart if needed
+kubectl rollout restart deployment/ingress-nginx-controller -n ingress-nginx
+```
+
+---
+
+## Full Recovery (if everything fails)
+
+```bash
+# 1. Delete cluster
+kind delete cluster
+
+# 2. Recreate (see phase-specific setup)
+./setup-template/phase0-template-foundation/setup-phase0.sh
+
+# 3. Wait for Argo CD to sync everything
+watch kubectl get applications -n argocd
+```
+
+---
+
+## Success Criteria
+
+✅ All pods `Running`
+✅ All Argo CD apps `Synced` + `Healthy`
+✅ Services accessible via port-forward
+
+**Time to recovery:** ~2-5 minutes (normal reboot) | ~10 minutes (full cluster recreate)

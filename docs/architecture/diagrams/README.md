@@ -50,8 +50,8 @@ npm install -g @mermaid-js/mermaid-cli
 # Render single diagram
 mmdc -i system-context.mmd -o system-context.png
 
-# Render all diagrams
-./tools/scripts/render-diagrams.sh
+# Render all diagrams manually
+for file in *.mmd; do mmdc -i "$file" -o "${file%.mmd}.png"; done
 ```
 
 ### Output

@@ -1,6 +1,11 @@
 # Observability Strategy
 
-> **Status:** Draft - Phase 2 work
+> **⚠️ STATUS: DRAFT - Phase 2 work**
+>
+> This document will define our observability stack (metrics, logging, tracing) for Phase 2+ production deployments.
+> **Action Required:** Populate with concrete stack details (Prometheus, Loki, Tempo, Grafana dashboards) when implementing Phase 2 features.
+
+---
 
 ## Purpose
 
@@ -31,16 +36,6 @@ Before finalizing this strategy, we need:
 - Application logging framework
 - Prometheus stack deployed
 - Production workloads to monitor
-
----
-
-## References
-
-- [Prometheus Best Practices](https://prometheus.io/docs/practices/)
-- [Grafana Loki Documentation](https://grafana.com/docs/loki/)
-- [OpenTelemetry Documentation](https://opentelemetry.io/docs/)
-- [SRE Workbook - SLOs](https://sre.google/workbook/implementing-slos/)
-
 
 ---
 

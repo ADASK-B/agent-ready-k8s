@@ -1,5 +1,13 @@
 # Runbook: Incident Triage & Response
 
+> **⚠️ STATUS: DRAFT - NOT YET IMPLEMENTED**
+>
+> This runbook describes **future production procedures** for incident response.
+> Current references to `backend`, dashboards, and specific namespaces are **placeholders**.
+> **Action Required:** Review and update this runbook when implementing Phase 2+ observability/production features.
+
+---
+
 > **Purpose:** Standardized incident response process (detection → resolution → postmortem).
 >
 > **Audience:** On-Call Engineers, SRE, Support

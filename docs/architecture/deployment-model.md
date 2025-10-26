@@ -1,6 +1,11 @@
 # Deployment Model
 
-> **Status:** Draft - Phase 2 work
+> **⚠️ STATUS: DRAFT - Phase 2 work**
+>
+> This document will describe our GitOps deployment patterns and environment strategy for Phase 2+ multi-environment deployments.
+> **Action Required:** Flesh out sync policies, rollback strategies, and environment promotion workflows when implementing Phase 2 features.
+
+---
 
 ## Purpose
 
@@ -31,15 +36,6 @@ Before finalizing this strategy, we need:
 - Environment-specific values files
 - Argo CD ApplicationSets defined
 - Production promotion workflow
-
----
-
-## References
-
-- [Argo CD Documentation](https://argo-cd.readthedocs.io/)
-- [Helm Best Practices](https://helm.sh/docs/chart_best_practices/)
-- [Sync Waves Documentation](https://argo-cd.readthedocs.io/en/stable/user-guide/sync-waves/)
-
 
 ---
 

@@ -1,5 +1,13 @@
 # Runbook: Secrets Rotation
 
+> **⚠️ STATUS: DRAFT - NOT YET IMPLEMENTED**
+>
+> This runbook describes **future production procedures** for secrets rotation.
+> Current references to `backend`, rotation scripts, and specific namespaces are **placeholders**.
+> **Action Required:** Review and update this runbook when implementing Phase 2+ security features.
+
+---
+
 > **Purpose:** Rotate secrets (DB passwords, Redis ACL, JWT keys, TLS certs) without downtime.
 >
 > **Audience:** SRE, Security Team, Platform Engineers

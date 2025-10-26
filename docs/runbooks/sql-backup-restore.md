@@ -1,5 +1,13 @@
 # Runbook: PostgreSQL Backup & Restore
 
+> **⚠️ STATUS: DRAFT - NOT YET IMPLEMENTED**
+>
+> This runbook describes **future production procedures** for PostgreSQL backup/restore.
+> Current references to `backend`, `MinIO`, `CronJobs`, and specific namespaces are **placeholders**.
+> **Action Required:** Review and update this runbook when implementing Phase 2+ production features.
+
+---
+
 > **Purpose:** Backup, restore, and disaster recovery procedures for PostgreSQL.
 >
 > **Audience:** SRE, Platform Engineers, On-Call
