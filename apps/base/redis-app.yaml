@@ -14,9 +14,15 @@ spec:
     helm:
       values: |
         image:
-          tag: "latest"
+          # SECURITY: Pinned version, avoid :latest in production
+          tag: "7.4.1"
         auth:
-          password: redispass
+          # SECURITY: Credentials loaded from pre-created Kubernetes Secret
+          # Create secret before deploying: kubectl create secret generic redis-credentials \
+          #   --from-literal=redis-password=<your-redis-password> \
+          #   -n demo-platform
+          existingSecret: redis-credentials
+          existingSecretPasswordKey: redis-password
         architecture: standalone
         master:
           persistence:

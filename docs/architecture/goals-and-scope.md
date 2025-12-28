@@ -125,7 +125,7 @@
 | Type          | Store                         | Pattern                                                                   | Security                     | Owner    | Scope |
 | ------------- | ----------------------------- | ------------------------------------------------------------------------- | ---------------------------- | -------- | ----- |
 | App config    | **SQL (SoT)**                 | Monotonic `version`; Redis **version-only** events; warm-load + reconcile | DB auth + RLS                | App/DBA  | MVP   |
-| Secrets       | **K8s Secrets** (enc at rest) | Mounted env/vol                                                           | ESO→Vault/KeyVault (Phase 2) | SecOps   | MVP   |
+| Secrets       | **K8s Secrets** (enc at rest) | Mounted env/vol                                                           | ESO→Vault/KeyVault (Phase 5+) | SecOps   | MVP   |
 | System config | Helm values                   | Git-tracked via Argo CD                                                   | Reviews/PRs                  | Platform | MVP   |
 
 ---
@@ -215,7 +215,7 @@
 | Config drift  | Unexpected behavior | GitOps + sync policies + alerts           |
 | Chat misuse   | PII typed into UI   | **No free text**; canned actions only     |
 | Scale plateau | Performance issues  | HPA, DB tuning, central Mimir when needed |
-| Secret sprawl | Breach risk         | ESO→Vault/KeyVault in Phase 2             |
+| Secret sprawl | Breach risk         | ESO→Vault/KeyVault in Phase 5+            |
 
 ---
 

@@ -86,7 +86,7 @@ answer
 
 ## 📚 Complete Documentation Inventory
 
-> **All 31 docs with full routing metadata.** Check before referencing.
+> **All 32 docs with full routing metadata.** Check before referencing.
 
 ### Root (5 docs)
 
@@ -135,21 +135,22 @@ answer
 | **Boot Routine** | After‑reboot checklist; system verification | After reboot checks / down or unstable cluster | reboot, boot, startup, cluster not responding, node not ready, crashloop, pending, health check, 502, connection refused, argocd down | install, setup, phase 0, architecture | `docs/quickstart/Boot-Routine.md` | ✅ Finalized |
 | **Local Dev Guide** | GitOps development workflow | Local development / dev workflow / gitops development | local dev, development, workflow, gitops, prerequisites | setup, reboot, boot routine | `docs/quickstart/local-dev.md` | ✅ Finalized |
 
-### docs/roadmap/ (2 docs)
+### docs/roadmap/ (3 docs)
 
 | Area | Purpose | When to read (intent) | **Keywords** | **Deny (do not route if these dominate)** | Path | **Status** |
 | ---- | ------- | --------------------- | ------------ | ------------------------------------------ | ---- | ---------- |
 | **Roadmap Phase 0** | Phase‑0 task list & status | Status / plan / progress | phase 0, task list, status, progress, roadmap, todo, backlog, milestone | reboot, install, setup, architecture | `docs/roadmap/Phase-0.md` | ✅ Finalized |
 | **Phase 1 Roadmap** | Phase 1 task list & GitOps transformation | Phase 1 / gitops transformation / status / progress | phase 1, gitops, transformation, status, progress, roadmap | setup, reboot, boot routine | `docs/roadmap/Phase-1.md` | ✅ Finalized |
+| **Phase 2 Roadmap** | Phase 2 Backend API (2a/2b/2c sub-phases) | Phase 2 / backend api / mvp / orgs projects auth | phase 2, backend, api, fastapi, orgs, projects, auth, jwt, rls, mvp | setup, reboot, boot routine | `docs/roadmap/Phase-2.md` | 🔜 Next |
 
 ### docs/runbooks/ (4 docs)
 
 | Area | Purpose | When to read (intent) | **Keywords** | **Deny (do not route if these dominate)** | Path | **Status** |
 | ---- | ------- | --------------------- | ------------ | ------------------------------------------ | ---- | ---------- |
 | **Config Hot-Reload Debug** | Debug config hot-reload issues | Config hot-reload / redis pubsub / debug config updates | hot-reload, config, redis, pubsub, debug, config updates | setup, reboot, boot routine | `docs/runbooks/config-hot-reload.md` | ⚠️ ACTIVE (placeholders) |
-| **SQL Backup & Restore** | PostgreSQL backup/restore procedures | Backup / restore / postgresql / disaster recovery | backup, restore, postgresql, pg_dump, disaster recovery, pitr | setup, reboot, boot routine | `docs/runbooks/sql-backup-restore.md` | ⚠️ DRAFT (Phase 2+) |
-| **Secrets Rotation** | Secrets rotation procedures | Secrets rotation / password rotation / key rotation | secrets, rotation, password rotation, key rotation, security | setup, reboot, boot routine | `docs/runbooks/secrets-rotation.md` | ⚠️ DRAFT (Phase 2+) |
-| **Incident Triage** | Incident response procedures | Incident response / triage / postmortem | incident, triage, response, postmortem, sev-1, war room | setup, reboot, boot routine | `docs/runbooks/incident-triage.md` | ⚠️ DRAFT (Phase 2+) |
+| **SQL Backup & Restore** | PostgreSQL backup/restore procedures | Backup / restore / postgresql / disaster recovery | backup, restore, postgresql, pg_dump, disaster recovery, pitr | setup, reboot, boot routine | `docs/runbooks/sql-backup-restore.md` | ⚠️ DRAFT (Phase 5+) |
+| **Secrets Rotation** | Secrets rotation procedures | Secrets rotation / password rotation / key rotation | secrets, rotation, password rotation, key rotation, security | setup, reboot, boot routine | `docs/runbooks/secrets-rotation.md` | ⚠️ DRAFT (Phase 5+) |
+| **Incident Triage** | Incident response procedures | Incident response / triage / postmortem | incident, triage, response, postmortem, sev-1, war room | setup, reboot, boot routine | `docs/runbooks/incident-triage.md` | ⚠️ DRAFT (Phase 5+) |
 
 ### docs/legal/ (2 docs)
 
@@ -166,4 +167,4 @@ answer
 
 ---
 
-**Legend:** ✅ Finalized | ⚠️ DRAFT (Phase 2) | ⚠️ ACTIVE (placeholders) | ℹ️ Reference
+**Legend:** ✅ Finalized | ⚠️ DRAFT (Phase 5+) | ⚠️ ACTIVE (placeholders) | ℹ️ Reference

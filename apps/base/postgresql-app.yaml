@@ -14,12 +14,17 @@ spec:
     helm:
       values: |
         image:
-          tag: "latest"
+          # SECURITY: Pinned version, avoid :latest in production
+          tag: "16.4.0"
         auth:
+          # SECURITY: Credentials loaded from pre-created Kubernetes Secret
+          # Create secret before deploying: kubectl create secret generic postgresql-credentials \
+          #   --from-literal=postgres-password=<your-postgres-password> \
+          #   --from-literal=password=<your-user-password> \
+          #   -n demo-platform
+          existingSecret: postgresql-credentials
           username: demouser
-          password: demopass
           database: demodb
-          postgresPassword: postgres
         primary:
           persistence:
             enabled: true

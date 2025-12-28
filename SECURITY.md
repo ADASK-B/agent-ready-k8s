@@ -35,16 +35,37 @@
 
 ### Current Baseline
 
-> **Note:** These checkboxes will be filled during Phase 2+ when security features are fully implemented and validated.
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Image signing (Cosign) | ❌ Planned | Phase 5+ |
+| SBOM generation (Syft/Trivy) | ❌ Planned | Phase 5+ |
+| Vulnerability scanning (Trivy) | ❌ Planned | Phase 5+ |
+| Pod Security Standards (PSA) | ❌ Planned | Phase 5+ |
+| Network Policies (default-deny) | ❌ Planned | Phase 5+ |
+| Secrets encryption at rest | ⚠️ Partial | K8s Secrets, not ESO |
+| RBAC least-privilege | ⚠️ Partial | Basic setup |
+| Audit logging enabled | ❌ Planned | Phase 5+ |
+| Pinned image versions | ✅ Done | 2025-12-28 |
+| No plaintext secrets in Git | ✅ Done | 2025-12-28 |
 
-- [ ] Image signing (Cosign)
-- [ ] SBOM generation (Syft/Trivy)
-- [ ] Vulnerability scanning (Trivy)
-- [ ] Pod Security Standards (PSA restricted)
-- [ ] Network Policies (default-deny)
-- [ ] Secrets encryption at rest
-- [ ] RBAC least-privilege
-- [ ] Audit logging enabled
+### Secrets Management (Current)
+
+Secrets are stored in Kubernetes Secrets (not in Git). Create before deployment:
+
+```bash
+# PostgreSQL credentials
+kubectl create secret generic postgresql-credentials \
+  --from-literal=postgres-password=<your-postgres-password> \
+  --from-literal=password=<your-user-password> \
+  -n demo-platform
+
+# Redis credentials
+kubectl create secret generic redis-credentials \
+  --from-literal=redis-password=<your-redis-password> \
+  -n demo-platform
+```
+
+See `.env.example` for required secret values.
 
 ### Threat Model
 

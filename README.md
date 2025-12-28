@@ -4,6 +4,29 @@
 
 ---
 
+## 📊 Current State (What Actually Exists)
+
+> **Important:** This section shows what is currently implemented. The "Repository Structure" section below shows the **target architecture (roadmap)**.
+
+| Component | Status | Description |
+|-----------|--------|-------------|
+| **kind Cluster** | ✅ Implemented | Local Kubernetes cluster configuration |
+| **Argo CD** | ✅ Implemented | GitOps deployment (v2.12.3) |
+| **PostgreSQL** | ✅ Implemented | Bitnami Helm chart (vendored) |
+| **Redis** | ✅ Implemented | Bitnami Helm chart (vendored) |
+| **NGINX Ingress** | ✅ Implemented | Vendored Helm chart |
+| **podinfo Demo** | ✅ Implemented | Test application (to be removed in Phase 2a) |
+| **Documentation** | ✅ Extensive | Architecture, ADRs, Roadmaps (~32 files) |
+| **Backend API** | ❌ Not started | Planned for Phase 2 (2a/2b/2c) |
+| **Frontend** | ❌ Not started | Planned for Phase 3 (Optional) |
+| **Terraform IaC** | ❌ Not started | Planned for Phase 4 (Oracle Cloud) |
+| **Observability** | ❌ Not started | Planned for Phase 5+ |
+| **Policies** | ❌ Not started | Planned for Phase 5+ |
+
+**See also:** [KNOWN_ISSUES.md](KNOWN_ISSUES.md) for known problems and project analysis.
+
+---
+
 ## 🎯 What is this?
 
 A **complete enterprise reference implementation** for building **multi-tenant SaaS platforms** on Kubernetes with:
@@ -19,10 +42,11 @@ A **complete enterprise reference implementation** for building **multi-tenant S
 
 ---
 
-## 📐 Repository Structure (Provider-Portable)
+## 📐 Repository Structure (Target State / Roadmap)
 
+> **⚠️ This is the TARGET architecture.** Many directories shown below do not exist yet. See "Current State" section above for what is actually implemented.
+>
 > **Key Concept:** `clusters/` = **Provider** overlays (AKS/EKS/GKE/Oracle/on-prem), `apps/` = **Environment** overlays (dev/staging/prod), `helm-charts/` = Application definitions.
-> **Roadmap note:** The tree below shows the target end-state; several entries are future work and may not exist in the current branch yet.
 
 ```
 .
@@ -60,7 +84,7 @@ A **complete enterprise reference implementation** for building **multi-tenant S
 │  ├─ adr/                                    # Architecture Decision Records (ADRs)
 │  │  ├─ ADR-0001-config-sot-sql.md           # Why PostgreSQL (not etcd/ConfigMaps) for config SoT
 │  │  ├─ ADR-0002-hot-reload-redis.md         # Why Redis Pub/Sub (not polling/etcd watches) for hot-reload
-│  │  ├─ ADR-0003-etcd-scope.md               # Why etcd ONLY for K8s control plane (app-etcd optional Phase 2+)
+│  │  ├─ ADR-0003-etcd-scope.md               # Why etcd ONLY for K8s control plane (app-etcd optional Phase 5+)
 │  │  ├─ ADR-0004-guest-auth.md               # Why guest sign-in (no PII, no registration, GDPR-friendly)
 │  │  ├─ ADR-0005-canned-chat.md              # Why canned actions only (no free text, no message storage)
 │  │  └─ ADR-0006-oracle-cloud-strategy.md    # Why Oracle Cloud Free Tier as production MVP (Phase 4)
@@ -255,7 +279,7 @@ A **complete enterprise reference implementation** for building **multi-tenant S
 │  │  │  ├─ Chart.yaml
 │  │  │  └─ values.yaml                       # Default: standalone, Pub/Sub enabled, ACL configured
 │  │  │
-│  │  ├─ minio/                               # Object storage (Phase 2+, disabled in MVP)
+│  │  ├─ minio/                               # Object storage (Phase 5+, disabled in MVP)
 │  │  │  ├─ Chart.yaml
 │  │  │  └─ values.yaml
 │  │  │
@@ -388,7 +412,7 @@ A **complete enterprise reference implementation** for building **multi-tenant S
 - **🔒 PostgreSQL RLS**: Row-level security on `org_id`/`project_id` enforces **automatic tenant isolation** (no app-level checks needed)
 - **✍️ Image Signing**: Cosign keyless (OIDC via GitHub Actions) or KMS-backed; admission policies **verify signatures before deployment**
 - **🚧 Default-Deny NetworkPolicies**: All traffic blocked by default; **allowlists explicit** (e.g., backend → PostgreSQL:5432, backend → Redis:6379)
-- **🔑 Secrets Management**: K8s Secrets (encrypted at rest) → Phase 2: **External Secrets Operator (ESO)** → Vault/Key Vault/Secrets Manager
+- **🔑 Secrets Management**: K8s Secrets (encrypted at rest) → Phase 5+: **External Secrets Operator (ESO)** → Vault/Key Vault/Secrets Manager
 - **📜 Audit Trail**: PostgreSQL `config_history` (all config changes), Kubernetes audit logs (all API calls), Git history (all infra/app changes)
 
 See [SECURITY.md](SECURITY.md) for vulnerability reporting, threat model, break-glass procedures.
@@ -397,19 +421,21 @@ See [SECURITY.md](SECURITY.md) for vulnerability reporting, threat model, break-
 
 ## 🎯 Project Phases & Roadmap
 
-| Phase | Status | Deliverables | Notes |
-|-------|--------|-------------|-------|
-| **Phase 0** | ✅ **Complete** | Local template foundation: kind cluster, PostgreSQL, Redis, Argo CD, ingress, baseline policies | Foundation MVP (65/65 tests passed) |
-| **Phase 1** | ✅ **Complete** | GitOps transformation: vendored charts, Argo CD app-of-apps, auto-sync/self-heal validation | Platform now fully declarative |
-| **Phase 2** | 🔜 **Next** | Backend API + DB migrations (Orgs, Projects, Auth, config hot-reload contracts), unit/integration tests | Establish core domain services |
-| **Phase 3** | 📅 Planned | Frontend shell, tenant dashboards, canned chat UI, Playwright smoke tests | Deliver end-user experience |
-| **Phase 4** | 📅 Planned | Real-time chat backend (WS/SSE fan-out), config hot-reload enforcement, Redis scaling patterns | Close chat & hot-reload MVP |
-| **Phase 5** | 📅 Planned | MVP rollout (Oracle Free Tier), Terraform modules, DNS/ACME automation | Demo/reference implementation (no SLA) |
-| **Phase 6** | 📅 Future | Observability & security hardening (kube-prom stack, alerting, ESO→Vault, image signing gates) | Operational maturity |
-| **Phase 7** | 📅 Future | DR & compliance: Velero drills, backup verification, incident response playbooks | Resilience & governance |
-| **Phase 8+** | 📅 Future | AI chat assistant, OIDC/SSO, multi-region overlays, cost guardrails | Feature & scale enhancements |
+| Phase | Status | Deliverables |
+|-------|--------|--------------|
+| **Phase 0** | ✅ **Complete** | Local foundation: kind cluster, PostgreSQL, Redis, Argo CD, NGINX Ingress |
+| **Phase 1** | ✅ **Complete** | GitOps transformation: vendored charts, Argo CD apps, auto-sync/self-heal |
+| **Phase 2a** | 🔜 **Next** | Backend skeleton: FastAPI + /health + Dockerfile + Helm chart + Argo CD App |
+| **Phase 2b** | 📅 Planned | Core domain: Orgs/Projects CRUD + PostgreSQL RLS + DB migrations |
+| **Phase 2c** | 📅 Planned | Guest Auth: JWT generation + auth middleware + integration tests |
+| **→ MVP** | 🎯 | **API works, tenants isolated, GitOps deployed** |
+| **Phase 3** | 📅 Optional | Frontend dashboard (React) + basic UI for Orgs/Projects |
+| **Phase 4** | 📅 Optional | Oracle Cloud deployment: Terraform modules + DNS/ACME |
+| **Phase 5+** | 📅 Future | Real-time chat, config hot-reload, observability, DR, OIDC/SSO |
 
-**Current Focus:** Phase 2 – Backend/API foundation.
+**Current Focus:** Phase 2a – Backend skeleton.
+
+> **Note:** Phases 3-4 are optional for MVP. Phase 5+ contains enterprise features that can be added incrementally.
 
 ---
 

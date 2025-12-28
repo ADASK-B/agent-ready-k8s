@@ -1,0 +1,55 @@
+# Secrets - NEVER commit these
+.env
+.env.local
+.env.*.local
+secrets/
+*.secret
+*.key
+*.pem
+*.crt
+
+# Kubernetes secrets (local files)
+*-credentials.yaml
+*-secret.yaml
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+*.tfvars
+!*.tfvars.example
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Helm
+*.tgz
+charts/
+
+# Kind
+kubeconfig
+*.kubeconfig
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Build artifacts
+dist/
+build/
+__pycache__/
+*.pyc
+node_modules/
