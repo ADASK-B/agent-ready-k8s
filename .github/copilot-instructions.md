@@ -1,28 +1,34 @@
-# agent-ready-k8s (link-only, single file)
+# agent-ready-k8s (Documentation Routing)
 
-> **Purpose:** Single control file for GitHub Copilot / LLM agents.
+> **IMPORTANT:** You must read `CLAUDE.md` FIRST before using this file.
+>
+> **Purpose:** Detailed documentation routing logic for AI agents.
 >
 > **Token policy:** Do **not** expand documentation inline. Load only the minimal **linked** file(s) on demand.
 
 ---
 
-## 🚨 Critical Rules
+## Prerequisites
 
-1. **Language:** All code, docs, commits **must be English**. Input may be any language → **Output always English**.
-2. **Keyword Interpretation:** All user requests (any language) must be internally translated to **English keywords only** for routing/matching. No dual-language keyword tables.
-3. **Infra guardrail (MUST):** Before any infrastructure choice/change:
+Before using this routing table, ensure you have read:
 
-```
-read_file("docs/architecture/ARCHITECTURE.md")
-```
+1. ✅ `CLAUDE.md` - Critical rules, security policies, and current implementation status
+2. ➡️ This file - Detailed routing logic and keyword matching
 
-4. **Docs are NOT auto-loaded.** Read only when needed via:
+**Critical rules are in CLAUDE.md** - this file focuses on routing efficiency.
+
+---
+
+## Key Routing Principles
+
+1. **Keyword Interpretation:** All user requests (any language) must be internally translated to **English keywords only** for routing/matching. No dual-language keyword tables.
+2. **Docs are NOT auto-loaded.** Read only when needed via:
 
 ```
 read_file("<path>")
 ```
 
-5. **Maintenance:** Keep paths/triggers current whenever files/folders/scripts/stack change or a phase completes.
+3. **Maintenance:** Keep paths/triggers current whenever files/folders/scripts/stack change or a phase completes.
 
 ---
 
@@ -33,14 +39,9 @@ read_file("<path>")
 **Flow**
 
 1. Normalize user request (lowercase, strip punctuation).
-2. If the request implies **infra decision** (db/storage/networking/security/cloud/mq) → **always**:
-
-   ```
-   read_file("docs/architecture/ARCHITECTURE.md")
-   ```
-3. Else match the **Routing Table** (specific > generic).
-4. Load **one** file first. If incomplete, load **one more** (max 2 per turn).
-5. Answer using only what was read. If still unclear, ask to load a specific path.
+2. Match the **Routing Table** below (specific > generic).
+3. Load **one** file first. If incomplete, load **one more** (max 2 per turn).
+4. Answer using only what was read. If still unclear, ask to load a specific path.
 
 **Action template**
 
@@ -52,15 +53,17 @@ answer
 
 **Tie-breakers**
 
-* **Architecture first** if any infra term matches—even if others also match.
+* **Architecture first** if any infra term matches—even if others also match (per CLAUDE.md Critical Rule #2).
 * **Specific > generic** (e.g., Boot Routine beats README for reboot issues).
 * **Ambiguous?** Ask once or propose top 2 candidate paths.
 
 ---
 
-**Quick Routing:**
-1. Infra → `ARCHITECTURE.md` ⚠️ ALWAYS
-2. Goals → `goals-and-scope.md`⚠️ ALWAYS
+**Quick Routing Shortcuts:**
+1. Infra decision → `ARCHITECTURE.md` (CLAUDE.md rule)
+2. Project goals → `goals-and-scope.md`
+3. After reboot issues → `Boot-Routine.md`
+4. Gap analysis → `KNOWN_ISSUES.md` (CLAUDE.md rule)
 
 ---
 
