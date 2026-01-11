@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls -la \"E:\\\\Dev\\\\agent-ready-k8s\\\\clusters\"\" 2>/dev/null || echo \"clusters directory not found \")"
+    ]
+  }
+}
