@@ -58,6 +58,7 @@ kubectl create secret generic redis-credentials \
 | Need | File |
 |------|------|
 | Full doc routing | `.github/copilot-instructions.md` |
+| Cloud capabilities | `docs/CLOUD-CAPABILITIES.md` |
 | Known issues + Analysis | `KNOWN_ISSUES.md` |
 | Architecture | `docs/architecture/ARCHITECTURE.md` |
 | MVP Goals | `docs/architecture/goals-and-scope.md` |

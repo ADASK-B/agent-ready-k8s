@@ -60,7 +60,8 @@ answer
 
 **Quick Routing:**
 1. Infra → `ARCHITECTURE.md` ⚠️ ALWAYS
-2. Goals → `goals-and-scope.md`⚠️ ALWAYS
+2. Goals → `goals-and-scope.md` ⚠️ ALWAYS
+3. Cloud capabilities → `CLOUD-CAPABILITIES.md` 💡 USER-FRIENDLY
 
 ---
 
@@ -68,6 +69,8 @@ answer
 
 * "Which **database** for local vs **AKS**?" → `read_file("docs/architecture/ARCHITECTURE.md")`
 * "What is the **project goal** and **MVP scope**?" → `read_file("docs/architecture/goals-and-scope.md")`
+* "**What can you do in the cloud**?" / "Was kannst du in der Cloud machen?" → `read_file("docs/CLOUD-CAPABILITIES.md")`
+* "What **cloud providers** are supported?" → `read_file("docs/CLOUD-CAPABILITIES.md")`
 * "Cluster shows **CrashLoopBackOff** after **reboot**" → `read_file("docs/quickstart/Boot-Routine.md")`
 * "Fresh laptop: how to **install** the stack?" → `read_file("setup-template/phase0-template-foundation/PHASE0-SETUP.md")`
 * "What's the **current status** of **Phase 0**?" → `read_file("docs/roadmap/Phase-0.md")`
@@ -86,7 +89,7 @@ answer
 
 ## 📚 Complete Documentation Inventory
 
-> **All 32 docs with full routing metadata.** Check before referencing.
+> **All 33 docs with full routing metadata.** Check before referencing.
 
 ### Root (5 docs)
 
@@ -97,6 +100,12 @@ answer
 | **Documentation Tracking** | Track documentation issues & fixes | Documentation todo list / doc fixes / doc status | documentation, doc fixes, todo, tracking, verification | architecture, setup, reboot | `DOCS_TODO.md` | ✅ Finalized |
 | **Agent Guidelines** | Repository conventions for agents | Agent workflow / coding style / commit conventions | agent, guidelines, conventions, coding style, commit, pr | architecture, setup, reboot | `AGENTS.md` | ✅ Finalized |
 | **Agent Routing** | Single control file for agent routing | Agent routing / documentation inventory / routing table | agent routing, copilot, routing table, documentation inventory | architecture, setup, reboot | `.github/copilot-instructions.md` | ✅ Finalized |
+
+### docs/ (1 doc)
+
+| Area | Purpose | When to read (intent) | **Keywords** | **Deny (do not route if these dominate)** | Path | **Status** |
+| ---- | ------- | --------------------- | ------------ | ------------------------------------------ | ---- | ---------- |
+| **Cloud Capabilities** | What you can do in the cloud; provider overview | Cloud capabilities / what can I do / provider comparison / features | cloud, capabilities, what can I do, what is possible, features, providers, aks, eks, gke, oracle, multi-cloud, deployment options, platform services | detailed architecture, specific setup, reboot | `docs/CLOUD-CAPABILITIES.md` | ✅ Finalized |
 
 ### docs/architecture/ (7 docs)
 
